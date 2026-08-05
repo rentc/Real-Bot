@@ -1,18 +1,24 @@
-const { initializeApp,cert} = require('firebase-admin/app');
-const { getFirestore} = require('firebase-admin/firestore');
-const serviceAccount = require('./config.json');
-
-initializeApp({
-  credential: cert(serviceAccount)
-});
-
+const fs = require('fs');
+const path = require('path');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 const { Storage } = require('@google-cloud/storage');
 
+const configPath = path.join(__dirname, 'config.json');
+if (fs.existsSync(configPath)) {
+  const serviceAccount = require(configPath);
+  initializeApp({
+    credential: cert(serviceAccount)
+  });
+} else {
+  initializeApp();
+}
+
 const db = getFirestore();
-const imagesDb = db.collection("images")
+const imagesDb = db.collection("images");
 
 const bucketName = process.env.BUCKET_NAME;
-const storage = new Storage();
+const storage = new Storage(fs.existsSync(configPath) ? { keyFilename: configPath } : {});
 
 
 const moment = require('moment-timezone');

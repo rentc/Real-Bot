@@ -11,7 +11,7 @@ exports.webhook = functions.region("asia-northeast1").https.onRequest(async (req
         return res.send(req.method);
     }
 
-    if (!line.verifySignature(req.headers["x-line-signature"], req.body)) {
+    if (!line.verifySignature(req.headers["x-line-signature"], req.rawBody || req.body)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -37,8 +37,9 @@ exports.webhook = functions.region("asia-northeast1").https.onRequest(async (req
         if (event.type === "memberJoined") {
             for (let member of event.joined.members) {
                 if (member.type === "user") {
-                    /* ✅ 2.1 [memberJoined] reply util.reply(event.replyToken,[messages.welcomeMessage()]) */
-                    await line.reply(event.replyToken, [messages.memberJoinedMessage(profile.data.displayName, event.source.groupId)])
+                    const profile = await line.getGroupMemberProfile(event.source.groupId, member.userId);
+                    const displayName = profile && profile.displayName ? profile.displayName : "สมาชิกใหม่";
+                    await line.reply(event.replyToken, [messages.memberJoinedMessage(displayName)]);
                 }
             }
             return res.end();

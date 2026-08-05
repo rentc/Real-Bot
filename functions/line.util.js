@@ -48,14 +48,42 @@ exports.reply = (token, payload) => {
   });
 };
 
+exports.getGroupMemberProfile = async (groupId, userId) => {
+  try {
+    const response = await axios({
+      method: "get",
+      url: `${LINE_MESSAGING_API}/group/${groupId}/member/${userId}`,
+      headers: {
+        "Authorization": `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    functions.logger.error("Failed to fetch group member profile:", error);
+    return null;
+  }
+};
+
 exports.verifySignature = (originalSignature, body) => {
-  let text = JSON.stringify(body);
-  text = text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, (e) => {
-    return "\\u" + e.charCodeAt(0).toString(16).toUpperCase() + "\\u" + e.charCodeAt(1).toString(16).toUpperCase();
-  });
-  const signature = crypto.createHmac("SHA256", LINE_CHANNEL_SECRET).update(text).digest("base64").toString();
+  if (!originalSignature) {
+    functions.logger.error("Missing x-line-signature header");
+    return false;
+  }
+
+  const channelSecret = process.env.LINE_CHANNEL_SECRET;
+  let rawBody = body;
+
+  if (typeof body === 'object' && !Buffer.isBuffer(body)) {
+    rawBody = JSON.stringify(body);
+  }
+
+  const signature = crypto
+    .createHmac("SHA256", channelSecret)
+    .update(rawBody)
+    .digest("base64");
+
   if (signature !== originalSignature) {
-    functions.logger.error("Unauthorized");
+    functions.logger.error("Unauthorized: Signature mismatch");
     return false;
   }
   return true;
