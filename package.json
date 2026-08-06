@@ -1,0 +1,23 @@
+{
+  "name": "wrc-ai-sales-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WRC AI Sales and Quotation Platform with LINE integration",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "test": "npm run test --workspace=apps/api"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "mnemonist": "^0.40.4"
+  }
+}
