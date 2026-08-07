@@ -204,7 +204,7 @@ export class LineWebhookService {
         return true;
       }
 
-      const businessKeywords = ['ขอราคา', 'เสนอราคา', 'ใบเสนอราคา', 'สอบถามราคา', 'เช็คราคา', 'เช็คสต๊อก'];
+      const businessKeywords = ['ราคา', 'เช็คสต๊อก'];
       if (businessKeywords.some((kw) => text.includes(kw))) {
         return true;
       }
@@ -221,7 +221,7 @@ export class LineWebhookService {
       // 2. Use AI to extract intent and items
       const extraction = await this.aiService.extractQuotationRequest(text);
       
-      if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ขอราคา')) {
+      if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ราคา')) {
         if (extraction.items && extraction.items.length > 0) {
           try {
             const tenantId = 'tenant_wrc_main'; // hardcoded for now

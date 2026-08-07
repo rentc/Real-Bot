@@ -11,7 +11,24 @@ export class ProductsService {
       query = query.where('tenantId', '==', tenantId);
     }
     const snapshot = await query.get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Fetch active prices to join
+    let priceQuery: FirebaseFirestore.Query = this.firebase.db.collection('prices').where('status', '==', 'ACTIVE');
+    if (tenantId) {
+      priceQuery = priceQuery.where('tenantId', '==', tenantId);
+    }
+    const priceSnapshot = await priceQuery.get();
+    const priceMap = new Map();
+    priceSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      priceMap.set(data.productId, data.price);
+    });
+
+    return products.map(p => ({
+      ...p,
+      price: priceMap.get(p.id) || 0
+    }));
   }
 
   async findOne(id: string) {

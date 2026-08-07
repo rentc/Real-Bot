@@ -4,6 +4,8 @@ import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import { onRequest } from 'firebase-functions/v2/https';
 import { AppModule } from './app.module';
+import helmet from 'helmet';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 let nestAppPromise: Promise<express.Express> | null = null;
 
@@ -14,6 +16,8 @@ async function bootstrap(): Promise<express.Express> {
     new ExpressAdapter(expressInstance),
   );
   
+  app.use(helmet());
+  
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -22,7 +26,18 @@ async function bootstrap(): Promise<express.Express> {
     }),
   );
   
+  app.setGlobalPrefix('api');
+  
   app.enableCors({ origin: true, credentials: true });
+
+  const config = new DocumentBuilder()
+    .setTitle('WRC AI Sales Platform API')
+    .setDescription('The API documentation for WRC')
+    .setVersion('1.0')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   await app.init();
   return expressInstance;
 }

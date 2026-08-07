@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { FirebaseModule } from './shared/firebase/firebase.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -16,12 +17,24 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { MatchingModule } from './modules/matching/matching.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { PdfModule } from './modules/pdf/pdf.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { ErpAdapterModule } from './modules/erp-adapter/erp-adapter.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../../.env'],
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     FirebaseModule,
     HealthModule,
     AuthModule,
@@ -35,6 +48,12 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     SessionsModule,
     MatchingModule,
     QuotationsModule,
+    ApprovalsModule,
+    PdfModule,
+    OrdersModule,
+    PaymentsModule,
+    AnalyticsModule,
+    ErpAdapterModule,
   ],
 })
 export class AppModule {}

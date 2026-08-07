@@ -28,6 +28,16 @@ let ProductsController = class ProductsController {
     async seed() {
         return this.productsService.seed();
     }
+    async testAi(text) {
+        try {
+            const mockConfigService = { get: (key) => process.env[key] };
+            const aiService = new (require('../../shared/ai/ai.service').AiService)(mockConfigService);
+            return await aiService.extractQuotationRequest(text || 'ขอราคา NYY 4x6 100 เมตร');
+        }
+        catch (e) {
+            return { error: e.message || String(e) };
+        }
+    }
 };
 exports.ProductsController = ProductsController;
 __decorate([
@@ -50,6 +60,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], ProductsController.prototype, "seed", null);
+__decorate([
+    (0, common_1.Get)('test/ai'),
+    __param(0, (0, common_1.Query)('text')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ProductsController.prototype, "testAi", null);
 exports.ProductsController = ProductsController = __decorate([
     (0, common_1.Controller)('products'),
     __metadata("design:paramtypes", [products_service_1.ProductsService])

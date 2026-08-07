@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const throttler_1 = require("@nestjs/throttler");
 const firebase_module_1 = require("./shared/firebase/firebase.module");
 const health_module_1 = require("./modules/health/health.module");
 const auth_module_1 = require("./modules/auth/auth.module");
@@ -22,6 +23,12 @@ const ai_module_1 = require("./shared/ai/ai.module");
 const sessions_module_1 = require("./modules/sessions/sessions.module");
 const matching_module_1 = require("./modules/matching/matching.module");
 const quotations_module_1 = require("./modules/quotations/quotations.module");
+const approvals_module_1 = require("./modules/approvals/approvals.module");
+const pdf_module_1 = require("./modules/pdf/pdf.module");
+const orders_module_1 = require("./modules/orders/orders.module");
+const payments_module_1 = require("./modules/payments/payments.module");
+const analytics_module_1 = require("./modules/analytics/analytics.module");
+const erp_adapter_module_1 = require("./modules/erp-adapter/erp-adapter.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -32,6 +39,10 @@ exports.AppModule = AppModule = __decorate([
                 isGlobal: true,
                 envFilePath: ['.env', '../../.env'],
             }),
+            throttler_1.ThrottlerModule.forRoot([{
+                    ttl: 60000,
+                    limit: 100,
+                }]),
             firebase_module_1.FirebaseModule,
             health_module_1.HealthModule,
             auth_module_1.AuthModule,
@@ -45,6 +56,12 @@ exports.AppModule = AppModule = __decorate([
             sessions_module_1.SessionsModule,
             matching_module_1.MatchingModule,
             quotations_module_1.QuotationsModule,
+            approvals_module_1.ApprovalsModule,
+            pdf_module_1.PdfModule,
+            orders_module_1.OrdersModule,
+            payments_module_1.PaymentsModule,
+            analytics_module_1.AnalyticsModule,
+            erp_adapter_module_1.ErpAdapterModule,
         ],
     })
 ], AppModule);

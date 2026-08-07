@@ -25,8 +25,12 @@ let MatchingService = MatchingService_1 = class MatchingService {
         const matched = products.find(p => {
             const sku = (p.sku || '').toUpperCase();
             const name = (p.name || '').toUpperCase();
-            const hasType = type ? (sku.includes(type) || name.includes(type)) : true;
-            const hasSize = size ? (sku.includes(size) || name.includes(size)) : true;
+            const normSku = sku.replace(/\s+/g, '');
+            const normName = name.replace(/\s+/g, '');
+            const normType = type.replace(/\s+/g, '');
+            const normSize = size.replace(/\s+/g, '');
+            const hasType = normType ? (normSku.includes(normType) || normName.includes(normType)) : true;
+            const hasSize = normSize ? (normSku.includes(normSize) || normName.includes(normSize)) : true;
             if (!type && !size)
                 return false;
             return hasType && hasSize;

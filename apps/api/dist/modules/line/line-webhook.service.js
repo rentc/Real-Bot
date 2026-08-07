@@ -170,7 +170,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             if (commands.some((cmd) => text.startsWith(cmd))) {
                 return true;
             }
-            const businessKeywords = ['ขอราคา', 'เสนอราคา', 'ใบเสนอราคา', 'สอบถามราคา', 'เช็คราคา', 'เช็คสต๊อก'];
+            const businessKeywords = ['ราคา', 'เช็คสต๊อก'];
             if (businessKeywords.some((kw) => text.includes(kw))) {
                 return true;
             }
@@ -181,7 +181,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         if (event.replyToken) {
             await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
             const extraction = await this.aiService.extractQuotationRequest(text);
-            if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ขอราคา')) {
+            if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ราคา')) {
                 if (extraction.items && extraction.items.length > 0) {
                     try {
                         const tenantId = 'tenant_wrc_main';
