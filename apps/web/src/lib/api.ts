@@ -1,8 +1,13 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-export async function fetchDashboardMetrics() {
+export async function fetchDashboardMetrics(groupId?: string, role?: string) {
   try {
-    const res = await fetch(`${API_URL}/analytics/dashboard`, { cache: 'no-store' });
+    const params = new URLSearchParams();
+    if (groupId) params.append('groupId', groupId);
+    if (role) params.append('role', role);
+    
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_URL}/analytics/dashboard${queryString}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to fetch metrics');
     return await res.json();
   } catch (error) {
@@ -14,6 +19,17 @@ export async function fetchDashboardMetrics() {
       totalRevenue: 0,
       pendingApprovals: 0,
     };
+  }
+}
+
+export async function fetchGroups() {
+  try {
+    const res = await fetch(`${API_URL}/groups`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch groups');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching groups:', error);
+    return [];
   }
 }
 

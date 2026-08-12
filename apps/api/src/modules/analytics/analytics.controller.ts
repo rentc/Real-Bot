@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, Query } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
@@ -9,7 +9,10 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get main dashboard metrics' })
-  async getDashboard() {
-    return this.analyticsService.getDashboardMetrics();
+  async getDashboard(
+    @Query('groupId') groupId?: string,
+    @Query('role') role?: string,
+  ) {
+    return this.analyticsService.getDashboardMetrics('tenant_wrc_main', groupId, role);
   }
 }

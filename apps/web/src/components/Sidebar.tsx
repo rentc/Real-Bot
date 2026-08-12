@@ -11,6 +11,7 @@ export default function Sidebar() {
     { name: 'Quotations', href: '/quotations' },
     { name: 'Orders', href: '/orders' },
     { name: 'Products & Pricing', href: '/products' },
+    { name: 'User Management', href: '/users' },
   ];
 
   return (

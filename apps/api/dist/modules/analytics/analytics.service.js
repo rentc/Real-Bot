@@ -16,18 +16,31 @@ let AnalyticsService = class AnalyticsService {
     constructor(firebase) {
         this.firebase = firebase;
     }
-    async getDashboardMetrics(tenantId = 'tenant_wrc_main') {
+    async getDashboardMetrics(tenantId = 'tenant_wrc_main', groupId, role) {
         const db = this.firebase.db;
+        let quotationsQuery = db.collection('quotations').where('tenantId', '==', tenantId);
+        let ordersQuery = db.collection('orders').where('tenantId', '==', tenantId);
+        let approvalsQuery = db.collection('approval_requests').where('tenantId', '==', tenantId).where('status', '==', 'SUBMITTED');
+        if (groupId) {
+            quotationsQuery = quotationsQuery.where('groupId', '==', groupId);
+            ordersQuery = ordersQuery.where('groupId', '==', groupId);
+            approvalsQuery = approvalsQuery.where('groupId', '==', groupId);
+        }
+        if (role) {
+            quotationsQuery = quotationsQuery.where('role', '==', role);
+            ordersQuery = ordersQuery.where('role', '==', role);
+            approvalsQuery = approvalsQuery.where('role', '==', role);
+        }
         const [quotationsSnapshot, ordersSnapshot, approvalsSnapshot] = await Promise.all([
-            db.collection('quotations').where('tenantId', '==', tenantId).get(),
-            db.collection('orders').where('tenantId', '==', tenantId).get(),
-            db.collection('approval_requests').where('tenantId', '==', tenantId).where('status', '==', 'SUBMITTED').get()
+            quotationsQuery.get(),
+            ordersQuery.get(),
+            approvalsQuery.get()
         ]);
         const totalQuotations = quotationsSnapshot.size;
         const totalOrders = ordersSnapshot.size;
         const pendingApprovals = approvalsSnapshot.size;
         let totalRevenue = 0;
-        ordersSnapshot.forEach(doc => {
+        ordersSnapshot.forEach((doc) => {
             totalRevenue += doc.data().total || 0;
         });
         const conversionRate = totalQuotations > 0 ? (totalOrders / totalQuotations) * 100 : 0;

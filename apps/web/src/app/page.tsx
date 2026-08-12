@@ -1,7 +1,13 @@
-import { fetchDashboardMetrics } from '@/lib/api';
+import { Suspense } from 'react';
+import { fetchDashboardMetrics, fetchGroups } from '@/lib/api';
+import DashboardFilters from '@/components/DashboardFilters';
 
-export default async function Dashboard() {
-  const metrics = await fetchDashboardMetrics();
+export const dynamic = 'force-dynamic';
+
+export default async function Dashboard({ searchParams }: { searchParams: { groupId?: string, role?: string } }) {
+  const { groupId, role } = searchParams;
+  const metrics = await fetchDashboardMetrics(groupId, role);
+  const groups = await fetchGroups();
 
   return (
     <div>
@@ -9,6 +15,10 @@ export default async function Dashboard() {
         Dashboard <span className="text-gradient">Overview</span>
       </h1>
       
+      <Suspense fallback={<div>Loading filters...</div>}>
+        <DashboardFilters groups={groups} currentGroupId={groupId} currentRole={role} />
+      </Suspense>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         
         <div className="glass-panel hover-glow" style={{ padding: '24px' }}>
