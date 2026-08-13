@@ -1,22 +1,22 @@
 :root {
-  /* Premium Dark Theme */
-  --bg-primary: #0a0a0c;
-  --bg-secondary: #121217;
-  --bg-tertiary: #1a1a24;
-  --text-primary: #f0f0f5;
-  --text-secondary: #a0a0b0;
+  /* Premium Bright Theme */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
   
   /* WRC Accent Colors */
-  --accent-red: #ff3366;
-  --accent-red-glow: rgba(255, 51, 102, 0.2);
-  --accent-blue: #3388ff;
-  --accent-blue-glow: rgba(51, 136, 255, 0.2);
-  --accent-green: #00e676;
+  --accent-red: #ef4444;
+  --accent-red-glow: rgba(239, 68, 68, 0.2);
+  --accent-blue: #3b82f6;
+  --accent-blue-glow: rgba(59, 130, 246, 0.3);
+  --accent-green: #10b981;
 
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  /* Glassmorphism / Panels for light theme */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(226, 232, 240, 0.8);
+  --glass-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.05);
 
   /* Layout */
   --sidebar-width: 280px;
@@ -30,6 +30,7 @@ body {
   padding: 0;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  font-family: inherit;
 }
 
 /* Utilities */
@@ -43,39 +44,39 @@ body {
 }
 
 .text-gradient {
-  background: linear-gradient(90deg, var(--accent-blue), #8a2be2);
+  background: linear-gradient(90deg, var(--accent-blue), #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .hover-glow {
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hover-glow:hover {
-  box-shadow: 0 0 20px var(--accent-blue-glow);
-  transform: translateY(-2px);
-  border-color: rgba(51, 136, 255, 0.3);
+  box-shadow: 0 8px 30px var(--accent-blue-glow);
+  transform: translateY(-4px);
+  border-color: var(--accent-blue);
 }
 
 /* Form Elements */
 .input-premium {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--glass-border);
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
   color: var(--text-primary);
   padding: 12px 16px;
   border-radius: 8px;
   outline: none;
-  transition: border-color 0.3s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .input-premium:focus {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px var(--accent-blue-glow);
+  box-shadow: 0 0 0 3px var(--accent-blue-glow);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-blue), #1e5bbd);
+  background: linear-gradient(135deg, var(--accent-blue), #2563eb);
   color: white;
   padding: 12px 24px;
   border-radius: 8px;
@@ -103,4 +104,11 @@ a {
 button {
   cursor: pointer;
   font-family: inherit;
+}
+
+/* Responsive Utilities */
+@media (max-width: 768px) {
+  :root {
+    --header-height: 60px;
+  }
 }

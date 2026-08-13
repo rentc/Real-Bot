@@ -11,6 +11,7 @@ exports.FirebaseService = void 0;
 const common_1 = require("@nestjs/common");
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
+const storage_1 = require("firebase-admin/storage");
 let FirebaseService = FirebaseService_1 = class FirebaseService {
     constructor() {
         this.logger = new common_1.Logger(FirebaseService_1.name);
@@ -22,6 +23,7 @@ let FirebaseService = FirebaseService_1 = class FirebaseService {
         }
         this.db = (0, firestore_1.getFirestore)();
         this.db.settings({ ignoreUndefinedProperties: true });
+        this.storage = (0, storage_1.getStorage)().bucket();
     }
 };
 exports.FirebaseService = FirebaseService;

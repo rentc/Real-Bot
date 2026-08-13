@@ -11,24 +11,7 @@ export class ProductsService {
       query = query.where('tenantId', '==', tenantId);
     }
     const snapshot = await query.get();
-    const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    // Fetch active prices to join
-    let priceQuery: FirebaseFirestore.Query = this.firebase.db.collection('prices').where('status', '==', 'ACTIVE');
-    if (tenantId) {
-      priceQuery = priceQuery.where('tenantId', '==', tenantId);
-    }
-    const priceSnapshot = await priceQuery.get();
-    const priceMap = new Map();
-    priceSnapshot.docs.forEach(doc => {
-      const data = doc.data();
-      priceMap.set(data.productId, data.price);
-    });
-
-    return products.map(p => ({
-      ...p,
-      price: priceMap.get(p.id) || 0
-    }));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   async findOne(id: string) {
@@ -37,56 +20,111 @@ export class ProductsService {
     return { id: doc.id, ...doc.data() };
   }
 
+  async update(id: string, updates: any) {
+    const prodRef = this.firebase.db.collection('products').doc(id);
+    const doc = await prodRef.get();
+    if (!doc.exists) throw new NotFoundException(`Product ${id} not found`);
+    
+    await prodRef.update({
+      ...updates,
+      updatedAt: new Date()
+    });
+    
+    return { id, ...updates };
+  }
+
+  async activateAll(tenantId: string = 'tenant_wrc_main') {
+    const db = this.firebase.db;
+    const productsSnapshot = await db.collection('products').where('tenantId', '==', tenantId).get();
+    
+    const batch = db.batch();
+    let count = 0;
+    
+    productsSnapshot.docs.forEach(doc => {
+      if (doc.data().isActive !== true) {
+        batch.update(doc.ref, { isActive: true, updatedAt: new Date() });
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      await batch.commit();
+    }
+    
+    return { message: `Activated ${count} products successfully.` };
+  }
+
   async seed() {
     const tenantId = 'tenant_wrc_main';
     const db = this.firebase.db;
+    
+    // First, clear existing products
+    const oldProducts = await db.collection('products').where('tenantId', '==', tenantId).get();
+    const batchDelete = db.batch();
+    oldProducts.docs.forEach(doc => batchDelete.delete(doc.ref));
+    await batchDelete.commit();
+
     const batch = db.batch();
 
-    const productsData = [
-      { id: 'CBL-THW-001', sku: 'THW-1X1.5-BK', name: 'สายไฟ THW 1 x 1.5 ตร.มม. สีดำ', brand: 'Thai Cable', terms: ['thw', '1x1.5', 'สายไฟ', 'สีดำ'], price: 760 },
-      { id: 'CBL-THW-002', sku: 'THW-1X2.5-BK', name: 'สายไฟ THW 1 x 2.5 ตร.มม. สีดำ', brand: 'Thai Cable', terms: ['thw', '1x2.5', 'สายไฟ', 'สีดำ'], price: 1180 },
-      { id: 'CBL-THW-003', sku: 'THW-1X4-BK', name: 'สายไฟ THW 1 x 4 ตร.มม. สีดำ', brand: 'Phelps Dodge', terms: ['thw', '1x4', 'สายไฟ', 'สีดำ'], price: 1850 },
-      { id: 'CBL-THW-004', sku: 'THW-1X6-BK', name: 'สายไฟ THW 1 x 6 ตร.มม. สีดำ', brand: 'Phelps Dodge', terms: ['thw', '1x6', 'สายไฟ', 'สีดำ'], price: 2740 },
-      { id: 'CBL-NYY-001', sku: 'NYY-2X2.5', name: 'สายไฟ NYY 2 x 2.5 ตร.มม.', brand: 'BCC', terms: ['nyy', '2x2.5', 'สายไฟ'], price: 48 },
-      { id: 'CBL-NYY-002', sku: 'NYY-2X4', name: 'สายไฟ NYY 2 x 4 ตร.มม.', brand: 'BCC', terms: ['nyy', '2x4', 'สายไฟ'], price: 69 },
-      { id: 'CBL-NYY-003', sku: 'NYY-4X6', name: 'สายไฟ NYY 4 x 6 ตร.มม.', brand: 'Yazaki', terms: ['nyy', '4x6', 'สายไฟ'], price: 218 },
-      { id: 'CBL-VCT-001', sku: 'VCT-2X1.5', name: 'สายไฟอ่อน VCT 2 x 1.5 ตร.มม.', brand: 'Thai Cable', terms: ['vct', '2x1.5', 'สายไฟอ่อน'], price: 2180 },
-      { id: 'CBL-VCT-002', sku: 'VCT-3X2.5', name: 'สายไฟอ่อน VCT 3 x 2.5 ตร.มม.', brand: 'Thai Cable', terms: ['vct', '3x2.5', 'สายไฟอ่อน'], price: 3980 },
-      { id: 'CBL-VCT-003', sku: 'VCT-4X4', name: 'สายไฟอ่อน VCT 4 x 4 ตร.มม.', brand: 'Phelps Dodge', terms: ['vct', '4x4', 'สายไฟอ่อน'], price: 165 },
-      { id: 'CBL-CV-001', sku: 'CV-1X16', name: 'สายไฟ CV 1 x 16 ตร.มม.', brand: 'BCC', terms: ['cv', '1x16', 'สายไฟ'], price: 148 },
-      { id: 'CBL-CV-002', sku: 'CV-4X10', name: 'สายไฟ CV 4 x 10 ตร.มม.', brand: 'BCC', terms: ['cv', '4x10', 'สายไฟ'], price: 428 },
-      { id: 'CBL-VAF-001', sku: 'VAF-2X1.5', name: 'สายไฟ VAF 2 x 1.5 ตร.มม.', brand: 'Yazaki', terms: ['vaf', '2x1.5', 'สายไฟ'], price: 1650 },
-      { id: 'CBL-VAF-002', sku: 'VAF-2X2.5', name: 'สายไฟ VAF 2 x 2.5 ตร.มม.', brand: 'Yazaki', terms: ['vaf', '2x2.5', 'สายไฟ'], price: 2390 },
-      { id: 'CBL-CTL-001', sku: 'CTL-4X1.5', name: 'สายคอนโทรล 4 x 1.5 ตร.มม.', brand: 'Sample Brand', terms: ['ctl', '4x1.5', 'สายคอนโทรล'], price: 82 },
+    const rawData = [
+      { brand: 'BCC', type: 'THW', size: '16', quantity: 505, packaging: 'ขดลวด', discount: 64.25, basePrice: 168.77, status: 'Active' },
+      { brand: 'BCC', type: 'THW', size: '16', quantity: 1000, packaging: 'ขดลวด', discount: 61.78, basePrice: 168.77, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '16', quantity: 5000, packaging: '2000*2 / 1000', discount: 60.35, basePrice: 168.77, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '25', quantity: 1707, packaging: 'ขดลวด', discount: 64.25, basePrice: 265.54, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '25', quantity: 4000, packaging: '2000*2', discount: 60.35, basePrice: 265.54, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '35', quantity: 2000, packaging: 'ขดลวด', discount: 58.00, basePrice: 357.86, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '35', quantity: 2000, packaging: 'ขดลวด', discount: 57.30, basePrice: 357.86, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '50', quantity: 2000, packaging: 'ขดลวด', discount: 58.00, basePrice: 471.43, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '50', quantity: 3000, packaging: '2000+1000', discount: 57.30, basePrice: 471.43, status: 'Inactive' },
+      { brand: 'BCC', type: 'THW', size: '120', quantity: 2000, packaging: '1000*2', discount: 58.84, basePrice: 1173.91, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 16', quantity: 1000, packaging: 'ขดลวด', discount: 60.35, basePrice: 184.22, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 25', quantity: 2500, packaging: '1000 +1500', discount: 60.35, basePrice: 278.82, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 50', quantity: 1000, packaging: 'ขดลวด', discount: 58.84, basePrice: 484.00, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 50', quantity: 1000, packaging: 'ขดลวด', discount: 57.30, basePrice: 484.00, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 95', quantity: 1000, packaging: 'ขดลวด', discount: 60.60, basePrice: 977.87, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 95', quantity: 2000, packaging: '1000*2', discount: 59.13, basePrice: 977.87, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1 X 95', quantity: 5642, packaging: '1000*4+1642', discount: 63.15, basePrice: 655.17, status: 'Inactive' }, // Note: 655.17 seems incorrect in spreadsheet but keeping literal value
+      { brand: 'BCC', type: 'FD-CV', size: '1X 120', quantity: 384, packaging: 'ขดลวด', discount: 63.15, basePrice: 1239.94, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 150', quantity: 2000, packaging: '1000*2', discount: 61.50, basePrice: 1525.66, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 150', quantity: 5000, packaging: '1000*5', discount: 58.84, basePrice: 1525.66, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 150', quantity: 1860, packaging: '1000 + 860', discount: 57.30, basePrice: 1525.66, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 240', quantity: 3000, packaging: '1000*3', discount: 61.50, basePrice: 2518.71, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 240', quantity: 5000, packaging: '1000*5', discount: 58.84, basePrice: 2518.71, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 240', quantity: 4000, packaging: '1000*4', discount: 57.30, basePrice: 2518.71, status: 'Inactive' },
+      { brand: 'BCC', type: 'FD-CV', size: '1X 300', quantity: 1000, packaging: 'ขดลวด', discount: 57.30, basePrice: 3126.76, status: 'Inactive' },
+      { brand: 'BCC', type: 'CV', size: '1 X 50', quantity: 2000, packaging: 'ขดลวด', discount: 57.34, basePrice: 479.64, status: 'Inactive' },
+      { brand: 'BCC', type: 'CV', size: '1 X 70', quantity: 2000, packaging: '1000*2', discount: 59.06, basePrice: 704.01, status: 'Inactive' },
+      { brand: 'BCC', type: 'CV', size: '1X 185', quantity: 1000, packaging: 'ขดลวด', discount: 57.34, basePrice: 1890.80, status: 'Inactive' },
+      { brand: 'BCC', type: 'CV', size: '1X 300', quantity: 2000, packaging: '1000*2', discount: 57.34, basePrice: 3098.58, status: 'Inactive' },
     ];
 
-    for (const p of productsData) {
-      // Use fixed document IDs so we can overwrite/update them later easily
-      const prodRef = db.collection('products').doc(p.id);
+    let index = 1;
+    for (const p of rawData) {
+      // Create a predictable ID like BCC-THW-16-505
+      const cleanSize = p.size.replace(/\s+/g, '');
+      const id = `${p.brand}-${p.type}-${cleanSize}-${p.quantity}-${index}`;
+      const prodRef = db.collection('products').doc(id);
+      
       batch.set(prodRef, {
         tenantId,
-        name: p.name,
-        sku: p.sku,
+        name: `สายไฟ ${p.brand} ${p.type} ${p.size}`,
+        sku: id,
         brand: p.brand,
-        searchTerms: p.terms,
-        isActive: true,
+        category: 'Wiring',
+        type: p.type,
+        size: p.size,
+        basePrice: p.basePrice,
+        defaultDiscount: p.discount,
+        packaging: p.packaging,
+        quantity: p.quantity,
+        isActive: p.status === 'Active',
+        searchTerms: [p.brand.toLowerCase(), p.type.toLowerCase(), p.size.toLowerCase(), cleanSize.toLowerCase(), 'สายไฟ'],
         createdAt: new Date(),
       }, { merge: true });
-      
-      const priceRef = db.collection('prices').doc(`price_${p.id}`);
-      batch.set(priceRef, {
-        productId: p.id,
-        tenantId,
-        price: p.price,
-        currency: 'THB',
-        effectiveDate: new Date(),
-        status: 'ACTIVE',
-        createdBy: 'seed',
-      }, { merge: true });
+      index++;
     }
 
     await batch.commit();
-
-    return { message: 'Seeded 15 products' };
+    return { message: `Seeded ${rawData.length} products.` };
   }
 }

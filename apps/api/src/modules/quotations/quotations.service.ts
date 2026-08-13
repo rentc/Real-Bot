@@ -18,7 +18,7 @@ export class QuotationsService {
     for (const item of extractedItems) {
       const product: any = await this.matchingService.matchProduct(tenantId, item);
       if (product) {
-        const price = await this.pricesService.getActivePrice(product.id, tenantId);
+        const price = await this.pricesService.getNetPrice(product, groupId, tenantId);
         if (price !== null) {
           const itemTotal = price * item.quantity;
           subtotal += itemTotal;

@@ -16,16 +16,50 @@ let PricesService = class PricesService {
     constructor(firebase) {
         this.firebase = firebase;
     }
-    async getActivePrice(productId, tenantId) {
-        const priceSnapshot = await this.firebase.db.collection('prices')
-            .where('tenantId', '==', tenantId)
-            .where('productId', '==', productId)
-            .where('status', '==', 'ACTIVE')
-            .limit(1)
-            .get();
-        if (priceSnapshot.empty)
+    async getNetPrice(product, groupId, tenantId) {
+        if (!product || !product.basePrice)
             return null;
-        return priceSnapshot.docs[0].data().price;
+        let discount = product.defaultDiscount || 0;
+        const discountSnapshot = await this.firebase.db.collection('customerDiscounts')
+            .where('groupId', '==', groupId)
+            .where('tenantId', '==', tenantId)
+            .get();
+        if (!discountSnapshot.empty) {
+            const overrides = discountSnapshot.docs.map(d => d.data());
+            const productOverride = overrides.find(o => o.productId === product.id);
+            const typeOverride = overrides.find(o => o.type === product.type && !o.productId);
+            if (productOverride) {
+                discount = productOverride.finalDiscount ?? productOverride.discount ?? discount;
+            }
+            else if (typeOverride) {
+                discount = typeOverride.finalDiscount ?? typeOverride.discount ?? discount;
+            }
+        }
+        const netPrice = product.basePrice * (1 - discount / 100);
+        return Math.round(netPrice * 100) / 100;
+    }
+    async getOverrides(groupId, tenantId) {
+        const snapshot = await this.firebase.db.collection('customerDiscounts')
+            .where('groupId', '==', groupId)
+            .where('tenantId', '==', tenantId)
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    async setOverride(groupId, tenantId, productId, discount, adjustmentPercent) {
+        const id = `${groupId}_${productId}`;
+        const ref = this.firebase.db.collection('customerDiscounts').doc(id);
+        const data = {
+            groupId,
+            tenantId,
+            productId,
+            finalDiscount: discount,
+            updatedAt: new Date(),
+        };
+        if (adjustmentPercent !== undefined) {
+            data.adjustmentPercent = adjustmentPercent;
+        }
+        await ref.set(data, { merge: true });
+        return { id, groupId, productId, finalDiscount: discount, adjustmentPercent };
     }
 };
 exports.PricesService = PricesService;

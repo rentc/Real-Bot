@@ -71,6 +71,42 @@ Examples:
             return { intent: 'OTHER', items: [], debug_error: e.message || String(e), debug_raw: rawText };
         }
     }
+    async verifyPaymentSlip(imageBuffer, mimeType = 'image/jpeg') {
+        this.logger.log('Verifying payment slip with Gemini Vision...');
+        try {
+            const response = await this.ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    "Extract information from this bank transfer slip. If it is clearly not a bank transfer slip, set isSlip to false.",
+                    {
+                        inlineData: {
+                            data: imageBuffer.toString('base64'),
+                            mimeType: mimeType
+                        }
+                    }
+                ],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: genai_1.Type.OBJECT,
+                        properties: {
+                            isSlip: { type: genai_1.Type.BOOLEAN, description: "True if the image is a valid bank transfer slip" },
+                            amount: { type: genai_1.Type.NUMBER, description: "The exact amount of money transferred, e.g. 1500.50" },
+                            bankRef: { type: genai_1.Type.STRING, description: "The reference number, transaction ID, or ref code" },
+                            transferDate: { type: genai_1.Type.STRING, description: "The date and time of transfer, if available" }
+                        }
+                    }
+                }
+            });
+            let rawText = response.text || '{}';
+            rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            return JSON.parse(rawText);
+        }
+        catch (e) {
+            this.logger.error('Failed to verify slip', e);
+            return { isSlip: false, error: e.message };
+        }
+    }
 };
 exports.AiService = AiService;
 exports.AiService = AiService = AiService_1 = __decorate([

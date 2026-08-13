@@ -55,6 +55,17 @@ export async function fetchPendingApprovals() {
   }
 }
 
+export async function fetchApprovalHistory() {
+  try {
+    const res = await fetch(`${API_URL}/approvals/history`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch approval history');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching approval history:', error);
+    return [];
+  }
+}
+
 export async function fetchProducts() {
   try {
     const res = await fetch(`${API_URL}/products?tenantId=tenant_wrc_main`, { cache: 'no-store' });
@@ -63,5 +74,109 @@ export async function fetchProducts() {
   } catch (error) {
     console.error('Error fetching products:', error);
     return [];
+  }
+}
+
+export async function fetchGroup(groupId: string) {
+  try {
+    const res = await fetch(`${API_URL}/groups/${groupId}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch group');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching group:', error);
+    return null;
+  }
+}
+
+export async function fetchBuyerProfile(groupId: string) {
+  try {
+    const res = await fetch(`${API_URL}/buyers/${groupId}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching buyer profile:', error);
+    return null;
+  }
+}
+
+export async function fetchPriceOverrides(groupId: string) {
+  try {
+    const res = await fetch(`${API_URL}/prices/overrides?groupId=${groupId}&tenantId=tenant_wrc_main`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching price overrides:', error);
+    return [];
+  }
+}
+
+export async function approveQuotation(requestId: string) {
+  try {
+    const res = await fetch(`${API_URL}/approvals/${requestId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error('Failed to approve quotation');
+    return await res.json();
+  } catch (error) {
+    console.error('Error approving quotation:', error);
+    throw error;
+  }
+}
+
+export async function rejectQuotation(requestId: string, reason: string) {
+  try {
+    const res = await fetch(`${API_URL}/approvals/${requestId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    if (!res.ok) throw new Error('Failed to reject quotation');
+    return await res.json();
+  } catch (error) {
+    console.error('Error rejecting quotation:', error);
+    throw error;
+  }
+}
+
+export async function deleteQuotationRequest(requestId: string) {
+  try {
+    const res = await fetch(`${API_URL}/approvals/${requestId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete quotation request');
+    return await res.json();
+  } catch (error) {
+    console.error('Error deleting quotation request:', error);
+    throw error;
+  }
+}
+
+export async function updateProduct(id: string, updates: any) {
+  try {
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) throw new Error('Failed to update product');
+    return await res.json();
+  } catch (error) {
+    console.error('Error updating product:', error);
+    throw error;
+  }
+}
+
+export async function activateAllProducts() {
+  try {
+    const res = await fetch(`${API_URL}/products/activate-all?tenantId=tenant_wrc_main`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error('Failed to activate all products');
+    return await res.json();
+  } catch (error) {
+    console.error('Error activating all products:', error);
+    throw error;
   }
 }

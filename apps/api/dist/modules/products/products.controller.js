@@ -25,6 +25,12 @@ let ProductsController = class ProductsController {
     async findOne(id) {
         return this.productsService.findOne(id);
     }
+    async activateAll(tenantId) {
+        return this.productsService.activateAll(tenantId);
+    }
+    async update(id, updates) {
+        return this.productsService.update(id, updates);
+    }
     async seed() {
         return this.productsService.seed();
     }
@@ -54,6 +60,21 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], ProductsController.prototype, "findOne", null);
+__decorate([
+    (0, common_1.Post)('activate-all'),
+    __param(0, (0, common_1.Query)('tenantId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ProductsController.prototype, "activateAll", null);
+__decorate([
+    (0, common_1.Patch)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], ProductsController.prototype, "update", null);
 __decorate([
     (0, common_1.Get)('test/seed'),
     __metadata("design:type", Function),

@@ -27,6 +27,11 @@ export class OrdersController {
     return this.ordersService.listOrders();
   }
 
+  @Patch('fix-totals')
+  async fixTotals() {
+    return this.ordersService.fixTotals();
+  }
+
   @Get(':id')
   async getOrder(@Param('id') id: string) {
     return this.ordersService.getOrder(id);

@@ -22,7 +22,9 @@ let MatchingService = MatchingService_1 = class MatchingService {
         const products = await this.productsService.findAll(tenantId);
         const type = extractedItem.type?.toUpperCase() || '';
         const size = extractedItem.size?.toUpperCase() || '';
-        const matched = products.find(p => {
+        const activeProducts = products.filter(p => p.isActive);
+        const productsToSearch = activeProducts.length > 0 ? activeProducts : products;
+        const matched = productsToSearch.find(p => {
             const sku = (p.sku || '').toUpperCase();
             const name = (p.name || '').toUpperCase();
             const normSku = sku.replace(/\s+/g, '');

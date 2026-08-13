@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Query, Body } from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 @Controller('products')
@@ -13,6 +13,16 @@ export class ProductsController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
+  }
+
+  @Post('activate-all')
+  async activateAll(@Query('tenantId') tenantId?: string) {
+    return this.productsService.activateAll(tenantId);
+  }
+
+  @Patch(':id')
+  async update(@Param('id') id: string, @Body() updates: any) {
+    return this.productsService.update(id, updates);
   }
 
   @Get('test/seed')

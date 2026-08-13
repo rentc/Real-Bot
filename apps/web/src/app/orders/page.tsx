@@ -25,6 +25,7 @@ export default async function Orders() {
                 <th style={{ padding: '12px' }}>Customer ID</th>
                 <th style={{ padding: '12px' }}>Total</th>
                 <th style={{ padding: '12px' }}>Status</th>
+                <th style={{ padding: '12px' }}>Payment</th>
                 <th style={{ padding: '12px' }}>Date</th>
               </tr>
             </thead>
@@ -43,6 +44,34 @@ export default async function Orders() {
                     }}>
                       {order.status}
                     </span>
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        fontWeight: 'bold',
+                        fontSize: '12px',
+                        background: order.paymentStatus === 'PAID' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 193, 7, 0.1)',
+                        color: order.paymentStatus === 'PAID' ? '#4CAF50' : '#FFC107'
+                      }}>
+                        {order.paymentStatus || 'PENDING'}
+                      </span>
+                      {order.slipUrl && (
+                        <a 
+                          href={order.slipUrl} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--accent-blue)',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          View Slip
+                        </a>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: '12px' }}>{new Date(order.createdAt?._seconds ? order.createdAt._seconds * 1000 : Date.now()).toLocaleDateString()}</td>
                 </tr>

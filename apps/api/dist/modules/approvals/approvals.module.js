@@ -10,11 +10,13 @@ exports.ApprovalsModule = void 0;
 const common_1 = require("@nestjs/common");
 const approvals_service_1 = require("./approvals.service");
 const approvals_controller_1 = require("./approvals.controller");
+const line_module_1 = require("../line/line.module");
 let ApprovalsModule = class ApprovalsModule {
 };
 exports.ApprovalsModule = ApprovalsModule;
 exports.ApprovalsModule = ApprovalsModule = __decorate([
     (0, common_1.Module)({
+        imports: [(0, common_1.forwardRef)(() => line_module_1.LineModule)],
         controllers: [approvals_controller_1.ApprovalsController],
         providers: [approvals_service_1.ApprovalsService],
         exports: [approvals_service_1.ApprovalsService],

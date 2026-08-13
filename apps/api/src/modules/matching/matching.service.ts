@@ -16,7 +16,11 @@ export class MatchingService {
     const size = extractedItem.size?.toUpperCase() || '';
     
     // Match if SKU or Name contains both Type and Size (ignoring spaces)
-    const matched = products.find(p => {
+    // Prioritize active products
+    const activeProducts = products.filter(p => p.isActive);
+    const productsToSearch = activeProducts.length > 0 ? activeProducts : products;
+
+    const matched = productsToSearch.find(p => {
       const sku = (p.sku || '').toUpperCase();
       const name = (p.name || '').toUpperCase();
       

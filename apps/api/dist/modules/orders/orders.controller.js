@@ -30,6 +30,9 @@ let OrdersController = class OrdersController {
     async listOrders() {
         return this.ordersService.listOrders();
     }
+    async fixTotals() {
+        return this.ordersService.fixTotals();
+    }
     async getOrder(id) {
         return this.ordersService.getOrder(id);
     }
@@ -59,6 +62,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "listOrders", null);
+__decorate([
+    (0, common_1.Patch)('fix-totals'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "fixTotals", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),

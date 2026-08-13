@@ -40,8 +40,9 @@ let OrdersService = class OrdersService {
                 items: quotationData.items || [],
                 subtotal: quotationData.subtotal || 0,
                 vat: quotationData.vat || 0,
-                total: quotationData.total || 0,
+                total: quotationData.grandTotal || quotationData.total || 0,
                 status: 'PENDING',
+                paymentStatus: 'PENDING',
                 deliveryEvents: [],
                 createdBy,
                 createdAt: new Date(),
@@ -92,11 +93,71 @@ let OrdersService = class OrdersService {
     }
     async listOrders(tenantId = 'tenant_wrc_main') {
         const snapshot = await this.firebase.db.collection('orders')
-            .where('tenantId', '==', tenantId)
             .orderBy('createdAt', 'desc')
-            .limit(50)
+            .limit(100)
             .get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return allOrders.filter(order => order.tenantId === tenantId).slice(0, 50);
+    }
+    async findPendingOrderForGroup(groupId, tenantId = 'tenant_wrc_main') {
+        const snapshot = await this.firebase.db.collection('orders')
+            .where('status', '==', 'PENDING')
+            .get();
+        let pendingOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        pendingOrders = pendingOrders
+            .filter(o => o.tenantId === tenantId && o.paymentStatus === 'PENDING')
+            .sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0));
+        for (const order of pendingOrders) {
+            if (order.quotationId) {
+                const quoteDoc = await this.firebase.db.collection('quotations').doc(order.quotationId).get();
+                if (quoteDoc.exists && quoteDoc.data()?.groupId === groupId) {
+                    return order;
+                }
+            }
+        }
+        return null;
+    }
+    async markOrderPaid(orderId, slipMeta, slipUrl) {
+        const db = this.firebase.db;
+        const orderRef = db.collection('orders').doc(orderId);
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(orderRef);
+            if (!doc.exists) {
+                throw new common_1.NotFoundException('Order not found');
+            }
+            const updates = {
+                paymentStatus: 'PAID',
+                status: 'CONFIRMED',
+                paymentVerifiedAt: new Date(),
+                slipVerification: slipMeta,
+                updatedAt: new Date(),
+            };
+            if (slipUrl) {
+                updates.slipUrl = slipUrl;
+            }
+            t.update(orderRef, updates);
+        });
+        return { message: 'Order marked as paid' };
+    }
+    async fixTotals() {
+        const db = this.firebase.db;
+        const snapshot = await db.collection('orders').where('total', '==', 0).get();
+        let count = 0;
+        for (const doc of snapshot.docs) {
+            const order = doc.data();
+            if (order.quotationId) {
+                const quoteDoc = await db.collection('quotations').doc(order.quotationId).get();
+                if (quoteDoc.exists) {
+                    const q = quoteDoc.data();
+                    const realTotal = q?.grandTotal || q?.total || 0;
+                    if (realTotal > 0) {
+                        await doc.ref.update({ total: realTotal });
+                        count++;
+                    }
+                }
+            }
+        }
+        return { message: `Fixed totals for ${count} orders` };
     }
 };
 exports.OrdersService = OrdersService;

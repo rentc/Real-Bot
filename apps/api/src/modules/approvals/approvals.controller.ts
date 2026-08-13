@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards, Request, Get } from '@nestjs/common';
+import { Controller, Post, Param, Body, UseGuards, Request, Get, Delete } from '@nestjs/common';
 import { ApprovalsService } from './approvals.service';
 
 @Controller('approvals')
@@ -23,8 +23,18 @@ export class ApprovalsController {
     return this.approvalsService.rejectRequest(id, userId, reason);
   }
 
+  @Get('history')
+  async listHistory() {
+    return this.approvalsService.listHistory();
+  }
+
   @Get()
   async listPending() {
     return this.approvalsService.listPending();
+  }
+
+  @Delete(':id')
+  async deleteRequest(@Param('id') id: string) {
+    return this.approvalsService.deleteRequest(id);
   }
 }

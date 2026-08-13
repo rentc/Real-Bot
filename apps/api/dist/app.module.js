@@ -29,6 +29,7 @@ const orders_module_1 = require("./modules/orders/orders.module");
 const payments_module_1 = require("./modules/payments/payments.module");
 const analytics_module_1 = require("./modules/analytics/analytics.module");
 const erp_adapter_module_1 = require("./modules/erp-adapter/erp-adapter.module");
+const buyers_module_1 = require("./modules/buyers/buyers.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -62,6 +63,7 @@ exports.AppModule = AppModule = __decorate([
             payments_module_1.PaymentsModule,
             analytics_module_1.AnalyticsModule,
             erp_adapter_module_1.ErpAdapterModule,
+            buyers_module_1.BuyersModule,
         ],
     })
 ], AppModule);

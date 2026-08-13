@@ -1,9 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { FirebaseService } from '../../shared/firebase/firebase.service';
 import { LineApiService } from './line-api.service';
 import { AiService } from '../../shared/ai/ai.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { QuotationsService } from '../quotations/quotations.service';
+
+import { ApprovalsService } from '../approvals/approvals.service';
+import { OrdersService } from '../orders/orders.service';
 
 interface LineEvent {
   type: string;
@@ -41,6 +44,9 @@ export class LineWebhookService {
     private readonly aiService: AiService,
     private readonly sessionsService: SessionsService,
     private readonly quotationsService: QuotationsService,
+    @Inject(forwardRef(() => ApprovalsService))
+    private readonly approvalsService: ApprovalsService,
+    private readonly ordersService: OrdersService,
   ) {}
 
   async processEvent(event: LineEvent): Promise<void> {
@@ -187,6 +193,8 @@ export class LineWebhookService {
 
     if (message.type === 'text' && message.text) {
       await this.handleTextMessage(event, message.text, groupId, userId);
+    } else if (message.type === 'image') {
+      await this.handleImageMessage(event, message.id, groupId, userId);
     }
   }
 
@@ -210,13 +218,86 @@ export class LineWebhookService {
       }
     }
 
+    if (message.type === 'image') {
+      return true;
+    }
+
     return false;
+  }
+
+  private async handleImageMessage(event: LineEvent, messageId: string, groupId: string, userId: string): Promise<void> {
+    if (!event.replyToken) return;
+    
+    // Check if there is a pending order for this group before invoking AI
+    const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
+    if (!pendingOrder) {
+      // If there's no pending order, don't waste AI tokens verifying a slip
+      return;
+    }
+
+    try {
+      const imageBuffer = await this.lineApi.getContent(messageId);
+      const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
+      
+      if (verificationResult.isSlip) {
+        // Compare amount roughly (allow small floating point differences)
+        const orderTotal = pendingOrder.total;
+        const slipAmount = verificationResult.amount;
+        
+        if (slipAmount && Math.abs(slipAmount - orderTotal) < 1) {
+          // Upload slip to Firebase Storage
+          let slipUrl = '';
+          try {
+            const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
+            const file = this.firebase.storage.file(fileName);
+            await file.save(imageBuffer, {
+              metadata: { contentType: 'image/jpeg' }
+            });
+            await file.makePublic();
+            slipUrl = `https://storage.googleapis.com/${this.firebase.storage.name}/${fileName}`;
+          } catch (uploadError) {
+            this.logger.error('Failed to upload slip image', uploadError);
+          }
+
+          await this.ordersService.markOrderPaid(pendingOrder.id, verificationResult, slipUrl);
+          await this.lineApi.reply(event.replyToken, [{ 
+            type: 'text', 
+            text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ\nหมายเลขคำสั่งซื้อ: ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ: ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ` 
+          }]);
+        } else {
+          await this.lineApi.reply(event.replyToken, [{ 
+            type: 'text', 
+            text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber})\nยอดที่ต้องชำระ: ฿${orderTotal}\nยอดในสลิป: ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ` 
+          }]);
+        }
+      }
+    } catch (e) {
+      this.logger.error('Error handling image message', e);
+    }
   }
 
   private async handleTextMessage(event: LineEvent, text: string, groupId: string, userId: string): Promise<void> {
     if (event.replyToken) {
       // 1. Mark session as active
       await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
+      
+      // Handle #order command
+      if (text.startsWith('#order')) {
+        const parts = text.split(' ');
+        if (parts.length < 2) {
+           await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
+           return;
+        }
+        const quotationId = parts[1];
+        try {
+          const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
+          await this.lineApi.reply(event.replyToken, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
+        } catch (e) {
+          this.logger.error('Error creating order', e);
+          await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
+        }
+        return;
+      }
       
       // 2. Use AI to extract intent and items
       const extraction = await this.aiService.extractQuotationRequest(text);
@@ -226,6 +307,9 @@ export class LineWebhookService {
           try {
             const tenantId = 'tenant_wrc_main'; // hardcoded for now
             const quote = await this.quotationsService.generateDraftQuotation(tenantId, groupId, userId, extraction.items);
+            
+            // Automatically submit for approval
+            await this.approvalsService.submitQuotationForApproval(quote.id, userId, tenantId);
             
             let replyText = `📝 สร้างใบเสนอราคา (Draft) เรียบร้อยแล้ว\n`;
             replyText += `หมายเลขอ้างอิง: ${quote.id}\n\n`;
@@ -239,12 +323,22 @@ export class LineWebhookService {
               replyText += `- ${item.name} x ${item.quantity} = ${formatCurrency(item.total)} บาท\n`;
             }
             
+            const userProfile = await this.lineApi.getGroupMemberProfile(groupId, userId);
+            const displayName = userProfile?.displayName || 'ลูกค้า';
+            
             replyText += `\nยอดรวม: ${formatCurrency(quote.subtotal)} บาท\n`;
             replyText += `VAT 7%: ${formatCurrency(quote.vat)} บาท\n`;
-            replyText += `ยอดสุทธิ: ${formatCurrency(quote.grandTotal)} บาท\n\n`;
-            replyText += `แอดมินสามารถตรวจสอบและอนุมัติผ่านระบบหลังบ้านครับ`;
+            replyText += `ยอดสุทธิ: ${formatCurrency(quote.grandTotal)} บาท`;
             
-            await this.lineApi.reply(event.replyToken, [{ type: 'text', text: replyText }]);
+            let adminMessage = `⚠️ มีใบเสนอราคาใหม่รอการอนุมัติ\n`;
+            adminMessage += `ผู้ขอ: ⚙️ ${displayName}\n\n`;
+            adminMessage += `แอดมินสามารถตรวจสอบและอนุมัติได้ที่:\n`;
+            adminMessage += `https://real-bot-6a793.web.app/quotations`;
+            
+            await this.lineApi.reply(event.replyToken, [
+              { type: 'text', text: replyText },
+              { type: 'text', text: adminMessage }
+            ]);
           } catch (e) {
             this.logger.error('Error generating quotation', e);
             await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง' }]);

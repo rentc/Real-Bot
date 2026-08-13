@@ -51,16 +51,16 @@ export default function DashboardFilters({ groups, currentGroupId, currentRole }
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
-            border: '1px solid var(--border-color)',
-            background: 'var(--bg-panel)',
+            border: '1px solid var(--glass-border)',
+            background: 'var(--bg-secondary)',
             color: 'var(--text-primary)',
             minWidth: '200px'
           }}
         >
           <option value="">All Groups</option>
-          {groups?.map((g) => (
+          {groups?.map((g: any) => (
             <option key={g.id || g.groupId} value={g.id || g.groupId}>
-              {g.name || g.groupId || g.id}
+              {g.groupName || g.name || g.groupId || g.id}
             </option>
           ))}
         </select>
@@ -75,8 +75,8 @@ export default function DashboardFilters({ groups, currentGroupId, currentRole }
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
-            border: '1px solid var(--border-color)',
-            background: 'var(--bg-panel)',
+            border: '1px solid var(--glass-border)',
+            background: 'var(--bg-secondary)',
             color: 'var(--text-primary)',
             minWidth: '150px'
           }}

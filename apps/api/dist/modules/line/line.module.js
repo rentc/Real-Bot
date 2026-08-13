@@ -17,12 +17,14 @@ const line_webhook_service_1 = require("./line-webhook.service");
 const ai_module_1 = require("../../shared/ai/ai.module");
 const sessions_module_1 = require("../sessions/sessions.module");
 const quotations_module_1 = require("../quotations/quotations.module");
+const approvals_module_1 = require("../approvals/approvals.module");
+const orders_module_1 = require("../orders/orders.module");
 let LineModule = class LineModule {
 };
 exports.LineModule = LineModule;
 exports.LineModule = LineModule = __decorate([
     (0, common_1.Module)({
-        imports: [config_1.ConfigModule, groups_module_1.GroupsModule, users_module_1.UsersModule, ai_module_1.AiModule, sessions_module_1.SessionsModule, quotations_module_1.QuotationsModule],
+        imports: [config_1.ConfigModule, groups_module_1.GroupsModule, users_module_1.UsersModule, ai_module_1.AiModule, sessions_module_1.SessionsModule, quotations_module_1.QuotationsModule, (0, common_1.forwardRef)(() => approvals_module_1.ApprovalsModule), orders_module_1.OrdersModule],
         providers: [line_api_service_1.LineApiService, line_webhook_service_1.LineWebhookService],
         controllers: [line_webhook_controller_1.LineWebhookController],
         exports: [line_api_service_1.LineApiService],

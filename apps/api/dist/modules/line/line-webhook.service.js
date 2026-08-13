@@ -8,6 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var LineWebhookService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LineWebhookService = void 0;
@@ -17,13 +20,17 @@ const line_api_service_1 = require("./line-api.service");
 const ai_service_1 = require("../../shared/ai/ai.service");
 const sessions_service_1 = require("../sessions/sessions.service");
 const quotations_service_1 = require("../quotations/quotations.service");
+const approvals_service_1 = require("../approvals/approvals.service");
+const orders_service_1 = require("../orders/orders.service");
 let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
-    constructor(firebase, lineApi, aiService, sessionsService, quotationsService) {
+    constructor(firebase, lineApi, aiService, sessionsService, quotationsService, approvalsService, ordersService) {
         this.firebase = firebase;
         this.lineApi = lineApi;
         this.aiService = aiService;
         this.sessionsService = sessionsService;
         this.quotationsService = quotationsService;
+        this.approvalsService = approvalsService;
+        this.ordersService = ordersService;
         this.logger = new common_1.Logger(LineWebhookService_1.name);
     }
     async processEvent(event) {
@@ -157,6 +164,9 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         if (message.type === 'text' && message.text) {
             await this.handleTextMessage(event, message.text, groupId, userId);
         }
+        else if (message.type === 'image') {
+            await this.handleImageMessage(event, message.id, groupId, userId);
+        }
     }
     isRelevantMessage(message) {
         if (!message)
@@ -175,17 +185,83 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                 return true;
             }
         }
+        if (message.type === 'image') {
+            return true;
+        }
         return false;
+    }
+    async handleImageMessage(event, messageId, groupId, userId) {
+        if (!event.replyToken)
+            return;
+        const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
+        if (!pendingOrder) {
+            return;
+        }
+        try {
+            const imageBuffer = await this.lineApi.getContent(messageId);
+            const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
+            if (verificationResult.isSlip) {
+                const orderTotal = pendingOrder.total;
+                const slipAmount = verificationResult.amount;
+                if (slipAmount && Math.abs(slipAmount - orderTotal) < 1) {
+                    let slipUrl = '';
+                    try {
+                        const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
+                        const file = this.firebase.storage.file(fileName);
+                        await file.save(imageBuffer, {
+                            metadata: { contentType: 'image/jpeg' }
+                        });
+                        await file.makePublic();
+                        slipUrl = `https://storage.googleapis.com/${this.firebase.storage.name}/${fileName}`;
+                    }
+                    catch (uploadError) {
+                        this.logger.error('Failed to upload slip image', uploadError);
+                    }
+                    await this.ordersService.markOrderPaid(pendingOrder.id, verificationResult, slipUrl);
+                    await this.lineApi.reply(event.replyToken, [{
+                            type: 'text',
+                            text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ\nหมายเลขคำสั่งซื้อ: ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ: ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ`
+                        }]);
+                }
+                else {
+                    await this.lineApi.reply(event.replyToken, [{
+                            type: 'text',
+                            text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber})\nยอดที่ต้องชำระ: ฿${orderTotal}\nยอดในสลิป: ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ`
+                        }]);
+                }
+            }
+        }
+        catch (e) {
+            this.logger.error('Error handling image message', e);
+        }
     }
     async handleTextMessage(event, text, groupId, userId) {
         if (event.replyToken) {
             await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
+            if (text.startsWith('#order')) {
+                const parts = text.split(' ');
+                if (parts.length < 2) {
+                    await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
+                    return;
+                }
+                const quotationId = parts[1];
+                try {
+                    const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
+                    await this.lineApi.reply(event.replyToken, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
+                }
+                catch (e) {
+                    this.logger.error('Error creating order', e);
+                    await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
+                }
+                return;
+            }
             const extraction = await this.aiService.extractQuotationRequest(text);
             if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ราคา')) {
                 if (extraction.items && extraction.items.length > 0) {
                     try {
                         const tenantId = 'tenant_wrc_main';
                         const quote = await this.quotationsService.generateDraftQuotation(tenantId, groupId, userId, extraction.items);
+                        await this.approvalsService.submitQuotationForApproval(quote.id, userId, tenantId);
                         let replyText = `📝 สร้างใบเสนอราคา (Draft) เรียบร้อยแล้ว\n`;
                         replyText += `หมายเลขอ้างอิง: ${quote.id}\n\n`;
                         replyText += `รายการ:\n`;
@@ -195,11 +271,19 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                         for (const item of quote.items) {
                             replyText += `- ${item.name} x ${item.quantity} = ${formatCurrency(item.total)} บาท\n`;
                         }
+                        const userProfile = await this.lineApi.getGroupMemberProfile(groupId, userId);
+                        const displayName = userProfile?.displayName || 'ลูกค้า';
                         replyText += `\nยอดรวม: ${formatCurrency(quote.subtotal)} บาท\n`;
                         replyText += `VAT 7%: ${formatCurrency(quote.vat)} บาท\n`;
-                        replyText += `ยอดสุทธิ: ${formatCurrency(quote.grandTotal)} บาท\n\n`;
-                        replyText += `แอดมินสามารถตรวจสอบและอนุมัติผ่านระบบหลังบ้านครับ`;
-                        await this.lineApi.reply(event.replyToken, [{ type: 'text', text: replyText }]);
+                        replyText += `ยอดสุทธิ: ${formatCurrency(quote.grandTotal)} บาท`;
+                        let adminMessage = `⚠️ มีใบเสนอราคาใหม่รอการอนุมัติ\n`;
+                        adminMessage += `ผู้ขอ: ⚙️ ${displayName}\n\n`;
+                        adminMessage += `แอดมินสามารถตรวจสอบและอนุมัติได้ที่:\n`;
+                        adminMessage += `https://real-bot-6a793.web.app/quotations`;
+                        await this.lineApi.reply(event.replyToken, [
+                            { type: 'text', text: replyText },
+                            { type: 'text', text: adminMessage }
+                        ]);
                     }
                     catch (e) {
                         this.logger.error('Error generating quotation', e);
@@ -245,9 +329,12 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
 exports.LineWebhookService = LineWebhookService;
 exports.LineWebhookService = LineWebhookService = LineWebhookService_1 = __decorate([
     (0, common_1.Injectable)(),
+    __param(5, (0, common_1.Inject)((0, common_1.forwardRef)(() => approvals_service_1.ApprovalsService))),
     __metadata("design:paramtypes", [firebase_service_1.FirebaseService,
         line_api_service_1.LineApiService,
         ai_service_1.AiService,
         sessions_service_1.SessionsService,
-        quotations_service_1.QuotationsService])
+        quotations_service_1.QuotationsService,
+        approvals_service_1.ApprovalsService,
+        orders_service_1.OrdersService])
 ], LineWebhookService);

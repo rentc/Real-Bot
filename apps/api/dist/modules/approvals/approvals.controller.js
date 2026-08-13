@@ -31,8 +31,14 @@ let ApprovalsController = class ApprovalsController {
         const userId = req.user?.id || 'anonymous_admin';
         return this.approvalsService.rejectRequest(id, userId, reason);
     }
+    async listHistory() {
+        return this.approvalsService.listHistory();
+    }
     async listPending() {
         return this.approvalsService.listPending();
+    }
+    async deleteRequest(id) {
+        return this.approvalsService.deleteRequest(id);
     }
 };
 exports.ApprovalsController = ApprovalsController;
@@ -62,11 +68,24 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ApprovalsController.prototype, "reject", null);
 __decorate([
+    (0, common_1.Get)('history'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], ApprovalsController.prototype, "listHistory", null);
+__decorate([
     (0, common_1.Get)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], ApprovalsController.prototype, "listPending", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ApprovalsController.prototype, "deleteRequest", null);
 exports.ApprovalsController = ApprovalsController = __decorate([
     (0, common_1.Controller)('approvals'),
     __metadata("design:paramtypes", [approvals_service_1.ApprovalsService])

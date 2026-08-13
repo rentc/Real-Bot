@@ -24,6 +24,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ErpAdapterModule } from './modules/erp-adapter/erp-adapter.module';
+import { BuyersModule } from './modules/buyers/buyers.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ErpAdapterModule } from './modules/erp-adapter/erp-adapter.module';
     PaymentsModule,
     AnalyticsModule,
     ErpAdapterModule,
+    BuyersModule,
   ],
 })
 export class AppModule {}
