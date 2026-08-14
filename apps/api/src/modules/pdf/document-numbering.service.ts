@@ -7,7 +7,12 @@ export class DocumentNumberingService {
 
   async generateDocumentNumber(tenantId: string, prefix: string = 'QT'): Promise<string> {
     const db = this.firebase.db;
-    const counterRef = db.collection('document_counters').doc(`${tenantId}_${prefix}`);
+    const date = new Date();
+    // Format YYYYMMDD
+    const yearMonthDay = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}`;
+    
+    // We append the date to the counter ID so it resets daily
+    const counterRef = db.collection('document_counters').doc(`${tenantId}_${prefix}_${yearMonthDay}`);
 
     const newNumber = await db.runTransaction(async (t) => {
       const doc = await t.get(counterRef);
@@ -23,10 +28,8 @@ export class DocumentNumberingService {
       return nextSeq;
     });
 
-    const date = new Date();
-    const yearMonth = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-    const sequenceStr = newNumber.toString().padStart(3, '0');
+    const sequenceStr = newNumber.toString().padStart(2, '0');
     
-    return `${prefix}-${yearMonth}-${sequenceStr}`;
+    return `${prefix}-${yearMonthDay}${sequenceStr}`;
   }
 }

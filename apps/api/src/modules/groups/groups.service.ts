@@ -11,20 +11,18 @@ export class GroupsService {
     // In Firestore, we might need to count memberships manually or maintain a counter,
     // but for now we'll just return the groups without the count to keep it simple,
     // or fetch the count by querying the subcollection for each (inefficient but works for small scale).
-    const groups = [];
-    for (const doc of snapshot.docs) {
+    const groups = await Promise.all(snapshot.docs.map(async (doc) => {
       const data = doc.data();
-      
       const membershipsSnapshot = await doc.ref.collection('memberships').get();
       
-      groups.push({
+      return {
         id: doc.id,
         ...data,
         _count: {
           memberships: membershipsSnapshot.size,
         }
-      });
-    }
+      };
+    }));
     
     return groups;
   }

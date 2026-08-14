@@ -49,17 +49,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
         .main-content {
           flex: 1;
+          min-width: 0;
           margin-left: var(--sidebar-width);
-          margin-top: var(--header-height);
-          padding: 32px;
-          min-height: calc(100vh - var(--header-height));
+          padding: calc(var(--header-height) + 32px) 32px 32px 32px;
+          min-height: 100vh;
           transition: margin-left 0.3s ease;
         }
 
         @media (max-width: 768px) {
           .main-content {
             margin-left: 0;
-            padding: 16px;
+            padding: calc(var(--header-height) + 16px) 16px 16px 16px;
           }
         }
       `}</style>

@@ -16,10 +16,12 @@ exports.ApprovalsService = void 0;
 const common_1 = require("@nestjs/common");
 const firebase_service_1 = require("../../shared/firebase/firebase.service");
 const line_api_service_1 = require("../line/line-api.service");
+const document_numbering_service_1 = require("../pdf/document-numbering.service");
 let ApprovalsService = class ApprovalsService {
-    constructor(firebase, lineApi) {
+    constructor(firebase, lineApi, docNumbering) {
         this.firebase = firebase;
         this.lineApi = lineApi;
+        this.docNumbering = docNumbering;
     }
     async submitQuotationForApproval(quotationId, submittedBy, tenantId = 'tenant_wrc_main') {
         const db = this.firebase.db;
@@ -30,7 +32,8 @@ let ApprovalsService = class ApprovalsService {
         if (!existing.empty) {
             throw new common_1.BadRequestException('Quotation is already pending approval.');
         }
-        const requestRef = db.collection('approval_requests').doc();
+        const requestId = await this.docNumbering.generateDocumentNumber(tenantId, 'RE');
+        const requestRef = db.collection('approval_requests').doc(requestId);
         await requestRef.set({
             tenantId,
             quotationId,
@@ -38,7 +41,7 @@ let ApprovalsService = class ApprovalsService {
             submittedBy,
             submittedAt: new Date(),
         });
-        return { id: requestRef.id, message: 'Approval request submitted successfully' };
+        return { id: requestId, message: 'Approval request submitted successfully' };
     }
     async approveRequest(requestId, approvedBy) {
         const db = this.firebase.db;
@@ -84,6 +87,8 @@ let ApprovalsService = class ApprovalsService {
             for (const item of (quotationData.items || [])) {
                 itemsText += `• ${item.name} x ${item.quantity} = ฿${formatCurrency(item.total)}\n`;
             }
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api-e5mpppexfq-an.a.run.app/api';
+            const pdfUrl = `${apiBaseUrl}/quotations/${quotationData.id}/pdf`;
             let pushText = `✅ ใบเสนอราคาได้รับการอนุมัติแล้วครับ\n\n`;
             pushText += `📄 เลขที่: ${quotationData.id}\n`;
             pushText += `📅 วันที่: ${dateStr}\n\n`;
@@ -93,7 +98,8 @@ let ApprovalsService = class ApprovalsService {
             pushText += `ยอดก่อน VAT: ฿${formatCurrency(quotationData.subtotal)}\n`;
             pushText += `VAT 7%: ฿${formatCurrency(quotationData.vat)}\n`;
             pushText += `ยอดรวมทั้งสิ้น: ฿${formatCurrency(quotationData.grandTotal)}\n\n`;
-            pushText += `✅ แอดมินอนุมัติเรียบร้อยแล้ว ลูกค้าสามารถยืนยันและดำเนินการชำระเงินได้เลยครับ`;
+            pushText += `📥 ดาวน์โหลดใบเสนอราคา (PDF):\n${pdfUrl}\n\n`;
+            pushText += `✅ แอดมินอนุมัติเรียบร้อยแล้ว ลูกค้าสามารถตรวจสอบใบเสนอราคาและคลิกยืนยันด้านล่างเพื่อสั่งซื้อได้เลยครับ`;
             await this.lineApi.pushMessage(quotationData.groupId, [
                 {
                     type: 'text',
@@ -204,5 +210,6 @@ exports.ApprovalsService = ApprovalsService = __decorate([
     (0, common_1.Injectable)(),
     __param(1, (0, common_1.Inject)((0, common_1.forwardRef)(() => line_api_service_1.LineApiService))),
     __metadata("design:paramtypes", [firebase_service_1.FirebaseService,
-        line_api_service_1.LineApiService])
+        line_api_service_1.LineApiService,
+        document_numbering_service_1.DocumentNumberingService])
 ], ApprovalsService);

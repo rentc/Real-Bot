@@ -9,14 +9,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.QuotationsModule = void 0;
 const common_1 = require("@nestjs/common");
 const quotations_service_1 = require("./quotations.service");
+const quotations_controller_1 = require("./quotations.controller");
 const prices_module_1 = require("../prices/prices.module");
 const matching_module_1 = require("../matching/matching.module");
+const pdf_module_1 = require("../pdf/pdf.module");
 let QuotationsModule = class QuotationsModule {
 };
 exports.QuotationsModule = QuotationsModule;
 exports.QuotationsModule = QuotationsModule = __decorate([
     (0, common_1.Module)({
-        imports: [prices_module_1.PricesModule, matching_module_1.MatchingModule],
+        imports: [prices_module_1.PricesModule, matching_module_1.MatchingModule, pdf_module_1.PdfModule],
+        controllers: [quotations_controller_1.QuotationsController],
         providers: [quotations_service_1.QuotationsService],
         exports: [quotations_service_1.QuotationsService],
     })

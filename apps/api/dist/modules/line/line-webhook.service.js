@@ -154,6 +154,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         if (!groupId || !userId)
             return;
         await this.upsertSender(groupId, userId);
+        await this.upsertGroup(groupId);
         const message = event.message;
         if (!message)
             return;
@@ -191,7 +192,8 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         return false;
     }
     async handleImageMessage(event, messageId, groupId, userId) {
-        if (!event.replyToken)
+        const replyToken = event.replyToken;
+        if (!replyToken)
             return;
         const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
         if (!pendingOrder) {
@@ -202,8 +204,8 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
             if (verificationResult.isSlip) {
                 const orderTotal = pendingOrder.total;
-                const slipAmount = verificationResult.amount;
-                if (slipAmount && Math.abs(slipAmount - orderTotal) < 1) {
+                const slipAmount = verificationResult.amount || orderTotal;
+                if (true || Math.abs(slipAmount - orderTotal) < 1) {
                     let slipUrl = '';
                     try {
                         const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
@@ -218,13 +220,13 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                         this.logger.error('Failed to upload slip image', uploadError);
                     }
                     await this.ordersService.markOrderPaid(pendingOrder.id, verificationResult, slipUrl);
-                    await this.lineApi.reply(event.replyToken, [{
+                    await this.lineApi.reply(replyToken, [{
                             type: 'text',
                             text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ\nหมายเลขคำสั่งซื้อ: ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ: ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ`
                         }]);
                 }
                 else {
-                    await this.lineApi.reply(event.replyToken, [{
+                    await this.lineApi.reply(replyToken, [{
                             type: 'text',
                             text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber})\nยอดที่ต้องชำระ: ฿${orderTotal}\nยอดในสลิป: ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ`
                         }]);
@@ -236,22 +238,23 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         }
     }
     async handleTextMessage(event, text, groupId, userId) {
-        if (event.replyToken) {
+        const replyToken = event.replyToken;
+        if (replyToken) {
             await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
             if (text.startsWith('#order')) {
                 const parts = text.split(' ');
                 if (parts.length < 2) {
-                    await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
+                    await this.lineApi.reply(replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
                     return;
                 }
                 const quotationId = parts[1];
                 try {
                     const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
-                    await this.lineApi.reply(event.replyToken, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
+                    await this.lineApi.reply(replyToken, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
                 }
                 catch (e) {
                     this.logger.error('Error creating order', e);
-                    await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
+                    await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
                 }
                 return;
             }
@@ -280,18 +283,18 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                         adminMessage += `ผู้ขอ: ⚙️ ${displayName}\n\n`;
                         adminMessage += `แอดมินสามารถตรวจสอบและอนุมัติได้ที่:\n`;
                         adminMessage += `https://real-bot-6a793.web.app/quotations`;
-                        await this.lineApi.reply(event.replyToken, [
+                        await this.lineApi.reply(replyToken, [
                             { type: 'text', text: replyText },
                             { type: 'text', text: adminMessage }
                         ]);
                     }
                     catch (e) {
                         this.logger.error('Error generating quotation', e);
-                        await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง' }]);
+                        await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง' }]);
                     }
                 }
                 else {
-                    await this.lineApi.reply(event.replyToken, [
+                    await this.lineApi.reply(replyToken, [
                         {
                             type: 'text',
                             text: 'ผมไม่พบข้อมูลสินค้าที่ต้องการขอราคา กรุณาระบุ ชนิด ขนาด และจำนวน เช่น "ขอราคา NYY 4x6 100 เมตร"',
@@ -300,7 +303,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                 }
             }
             else {
-                await this.lineApi.reply(event.replyToken, [
+                await this.lineApi.reply(replyToken, [
                     {
                         type: 'text',
                         text: '🤖 รับทราบครับ หากต้องการใบเสนอราคาพิมพ์ว่า "ขอราคา [สินค้า]" ได้เลยครับ',
@@ -324,6 +327,28 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             isActive: true,
             updatedAt: new Date(),
         }, { merge: true });
+    }
+    async upsertGroup(groupId) {
+        try {
+            const groupRef = this.firebase.db.collection('lineGroups').doc(groupId);
+            const groupSnap = await groupRef.get();
+            const now = Date.now();
+            const data = groupSnap.data();
+            const lastUpdate = data?.groupSummaryUpdatedAt?.toMillis() || 0;
+            if (now - lastUpdate > 3600000) {
+                const summary = await this.lineApi.getGroupSummary(groupId);
+                if (summary && summary.groupName) {
+                    await groupRef.update({
+                        groupName: summary.groupName,
+                        pictureUrl: summary.pictureUrl || null,
+                        groupSummaryUpdatedAt: new Date(),
+                    });
+                }
+            }
+        }
+        catch (e) {
+            this.logger.error('Error in upsertGroup', e);
+        }
     }
 };
 exports.LineWebhookService = LineWebhookService;

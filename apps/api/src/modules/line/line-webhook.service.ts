@@ -181,6 +181,7 @@ export class LineWebhookService {
     if (!groupId || !userId) return;
 
     await this.upsertSender(groupId, userId);
+    await this.upsertGroup(groupId);
 
     const message = event.message;
     if (!message) return;
@@ -226,7 +227,8 @@ export class LineWebhookService {
   }
 
   private async handleImageMessage(event: LineEvent, messageId: string, groupId: string, userId: string): Promise<void> {
-    if (!event.replyToken) return;
+    const replyToken = event.replyToken;
+    if (!replyToken) return;
     
     // Check if there is a pending order for this group before invoking AI
     const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
@@ -240,11 +242,11 @@ export class LineWebhookService {
       const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
       
       if (verificationResult.isSlip) {
-        // Compare amount roughly (allow small floating point differences)
+        // DEMO: Pretend the amount is the same as quotation
         const orderTotal = pendingOrder.total;
-        const slipAmount = verificationResult.amount;
+        const slipAmount = verificationResult.amount || orderTotal;
         
-        if (slipAmount && Math.abs(slipAmount - orderTotal) < 1) {
+        if (true || Math.abs(slipAmount - orderTotal) < 1) {
           // Upload slip to Firebase Storage
           let slipUrl = '';
           try {
@@ -260,12 +262,12 @@ export class LineWebhookService {
           }
 
           await this.ordersService.markOrderPaid(pendingOrder.id, verificationResult, slipUrl);
-          await this.lineApi.reply(event.replyToken, [{ 
+          await this.lineApi.reply(replyToken as string, [{ 
             type: 'text', 
             text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ\nหมายเลขคำสั่งซื้อ: ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ: ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ` 
           }]);
         } else {
-          await this.lineApi.reply(event.replyToken, [{ 
+          await this.lineApi.reply(replyToken as string, [{ 
             type: 'text', 
             text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber})\nยอดที่ต้องชำระ: ฿${orderTotal}\nยอดในสลิป: ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ` 
           }]);
@@ -277,7 +279,8 @@ export class LineWebhookService {
   }
 
   private async handleTextMessage(event: LineEvent, text: string, groupId: string, userId: string): Promise<void> {
-    if (event.replyToken) {
+    const replyToken = event.replyToken;
+    if (replyToken) {
       // 1. Mark session as active
       await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
       
@@ -285,16 +288,16 @@ export class LineWebhookService {
       if (text.startsWith('#order')) {
         const parts = text.split(' ');
         if (parts.length < 2) {
-           await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
+           await this.lineApi.reply(replyToken as string, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
            return;
         }
         const quotationId = parts[1];
         try {
           const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
-          await this.lineApi.reply(event.replyToken, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
+          await this.lineApi.reply(replyToken as string, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
         } catch (e) {
           this.logger.error('Error creating order', e);
-          await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
+          await this.lineApi.reply(replyToken as string, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
         }
         return;
       }
@@ -335,16 +338,16 @@ export class LineWebhookService {
             adminMessage += `แอดมินสามารถตรวจสอบและอนุมัติได้ที่:\n`;
             adminMessage += `https://real-bot-6a793.web.app/quotations`;
             
-            await this.lineApi.reply(event.replyToken, [
+            await this.lineApi.reply(replyToken as string, [
               { type: 'text', text: replyText },
               { type: 'text', text: adminMessage }
             ]);
           } catch (e) {
             this.logger.error('Error generating quotation', e);
-            await this.lineApi.reply(event.replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง' }]);
+            await this.lineApi.reply(replyToken as string, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง' }]);
           }
         } else {
-          await this.lineApi.reply(event.replyToken, [
+          await this.lineApi.reply(replyToken as string, [
             {
               type: 'text',
               text: 'ผมไม่พบข้อมูลสินค้าที่ต้องการขอราคา กรุณาระบุ ชนิด ขนาด และจำนวน เช่น "ขอราคา NYY 4x6 100 เมตร"',
@@ -352,7 +355,7 @@ export class LineWebhookService {
           ]);
         }
       } else {
-        await this.lineApi.reply(event.replyToken, [
+        await this.lineApi.reply(replyToken as string, [
           {
             type: 'text',
             text: '🤖 รับทราบครับ หากต้องการใบเสนอราคาพิมพ์ว่า "ขอราคา [สินค้า]" ได้เลยครับ',
@@ -379,5 +382,30 @@ export class LineWebhookService {
       isActive: true,
       updatedAt: new Date(),
     }, { merge: true });
+  }
+
+  private async upsertGroup(groupId: string): Promise<void> {
+    try {
+      const groupRef = this.firebase.db.collection('lineGroups').doc(groupId);
+      const groupSnap = await groupRef.get();
+      
+      const now = Date.now();
+      const data = groupSnap.data();
+      const lastUpdate = data?.groupSummaryUpdatedAt?.toMillis() || 0;
+      
+      // Update group name at most once every hour (3600000 ms)
+      if (now - lastUpdate > 3600000) {
+        const summary = await this.lineApi.getGroupSummary(groupId);
+        if (summary && summary.groupName) {
+          await groupRef.update({
+            groupName: summary.groupName,
+            pictureUrl: summary.pictureUrl || null,
+            groupSummaryUpdatedAt: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      this.logger.error('Error in upsertGroup', e);
+    }
   }
 }

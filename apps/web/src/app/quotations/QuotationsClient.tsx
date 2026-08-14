@@ -103,9 +103,9 @@ export default function QuotationsClient({
         Quotation <span className="text-gradient">Approvals</span>
       </h1>
       
-      <div className="glass-panel" style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <input type="text" className="input-premium" placeholder="Search quotations..." style={{ width: '300px' }} />
-        <button className="btn-primary">Create Quotation</button>
+      <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'space-between', marginBottom: '24px', alignItems: 'center' }}>
+        <input type="text" className="input-premium" placeholder="Search quotations..." style={{ width: '100%', maxWidth: '300px' }} />
+        <button className="btn-primary" style={{ whiteSpace: 'nowrap' }}>Create Quotation</button>
       </div>
       
       {/* Tabs */}
@@ -144,7 +144,7 @@ export default function QuotationsClient({
         </button>
       </div>
 
-      <div className="glass-panel" style={{ padding: '24px', minHeight: '400px' }}>
+      <div className="glass-panel" style={{ padding: '24px', minHeight: '400px', overflowX: 'auto' }}>
         {currentList.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)' }}>No {activeTab} approvals right now.</p>
         ) : (
@@ -153,7 +153,7 @@ export default function QuotationsClient({
               <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'left' }}>
                 <th style={{ padding: '12px' }}>Request ID</th>
                 <th style={{ padding: '12px' }}>Quotation ID</th>
-                <th style={{ padding: '12px' }}>Submitted By</th>
+                {activeTab === 'pending' && <th style={{ padding: '12px' }}>Submitted By</th>}
                 <th style={{ padding: '12px' }}>Date</th>
                 {activeTab === 'history' && <th style={{ padding: '12px' }}>Status</th>}
                 <th style={{ padding: '12px' }}>Action</th>
@@ -164,7 +164,7 @@ export default function QuotationsClient({
                 <tr key={req.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '12px' }}>{req.id}</td>
                   <td style={{ padding: '12px' }}>{req.quotationId}</td>
-                  <td style={{ padding: '12px' }}>{req.submittedBy}</td>
+                  {activeTab === 'pending' && <td style={{ padding: '12px' }}>{req.submittedBy}</td>}
                   <td style={{ padding: '12px' }}>{new Date(req.submittedAt?._seconds ? req.submittedAt._seconds * 1000 : Date.now()).toLocaleDateString()}</td>
                   {activeTab === 'history' && (
                     <td style={{ padding: '12px' }}>
@@ -233,7 +233,24 @@ export default function QuotationsClient({
           position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
           background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
         }}>
-          <div className="glass-panel" style={{ width: '600px', maxWidth: '90%', padding: '32px', position: 'relative' }}>
+          <div className="glass-panel" style={{ width: '600px', maxWidth: '95%', maxHeight: '90vh', overflowY: 'auto', padding: '32px', position: 'relative' }}>
+            <button 
+              onClick={() => setSelectedRequest(null)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                fontSize: '24px',
+                cursor: 'pointer',
+                lineHeight: 1
+              }}
+              title="Close"
+            >
+              &times;
+            </button>
             <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>Review Quotation</h2>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
               <strong>Quotation ID:</strong> {selectedRequest.quotationId}
@@ -265,6 +282,36 @@ export default function QuotationsClient({
                     <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--accent-blue)' }}>
                       Total: ฿{formatCurrency(selectedRequest.quotation.grandTotal)}
                     </div>
+                  </div>
+                  
+                  <div style={{ marginTop: '24px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+                    <a 
+                      href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/quotations/${selectedRequest.quotationId}/pdf`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ 
+                        color: 'var(--accent-blue)', 
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: 500,
+                        padding: '8px 16px',
+                        background: 'rgba(59, 130, 246, 0.1)',
+                        borderRadius: '6px',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'}
+                      onMouseOut={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                      </svg>
+                      View Quotation PDF
+                    </a>
                   </div>
                 </div>
               </>

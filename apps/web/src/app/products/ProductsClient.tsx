@@ -12,10 +12,9 @@ export default function ProductsClient({ initialProducts }: { initialProducts: a
 
   useEffect(() => {
     // Fetch all customer groups for the dropdown
-    fetch('/api/groups')
-      .then(res => res.json())
-      .then(data => setGroups(data))
-      .catch(err => console.error('Error fetching groups:', err));
+    import('@/lib/api').then(({ fetchGroups }) => {
+      fetchGroups().then(data => setGroups(data));
+    });
   }, []);
 
   useEffect(() => {
@@ -26,21 +25,19 @@ export default function ProductsClient({ initialProducts }: { initialProducts: a
     }
 
     setLoading(true);
-    fetch(`/api/prices/overrides?groupId=${selectedGroup}&tenantId=tenant_wrc_main`)
-      .then(res => res.json())
-      .then(overrides => {
+    import('@/lib/api').then(({ fetchPriceOverrides }) => {
+      fetchPriceOverrides(selectedGroup).then(overrides => {
         // Merge overrides into products
         const updatedProducts = initialProducts.map(p => {
           const override = overrides.find((o: any) => o.productId === p.id);
           if (override) {
-            return { ...p, currentDiscount: override.discount, isOverridden: true };
+            return { ...p, currentDiscount: override.finalDiscount ?? override.discount, isOverridden: true };
           }
           return { ...p, currentDiscount: p.defaultDiscount, isOverridden: false };
         });
         setProducts(updatedProducts);
-      })
-      .catch(err => console.error('Error fetching overrides:', err))
-      .finally(() => setLoading(false));
+      }).finally(() => setLoading(false));
+    });
   }, [selectedGroup, initialProducts]);
 
   const handleDiscountChange = async (productId: string, newDiscount: string) => {
@@ -53,7 +50,10 @@ export default function ProductsClient({ initialProducts }: { initialProducts: a
 
     // Save to backend
     try {
-      await fetch(`/api/prices/overrides?groupId=${selectedGroup}&tenantId=tenant_wrc_main&productId=${productId}&discount=${numDiscount}`, {
+      const { updateProduct } = await import('@/lib/api');
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      // If we don't have a setOverride function, fetch directly
+      await fetch(`${API_URL}/prices/overrides?groupId=${selectedGroup}&tenantId=tenant_wrc_main&productId=${productId}&discount=${numDiscount}`, {
         method: 'POST'
       });
     } catch (err) {

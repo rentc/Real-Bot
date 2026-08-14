@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { FirebaseService } from '../../shared/firebase/firebase.service';
 import { LineApiService } from '../line/line-api.service';
+import { DocumentNumberingService } from '../pdf/document-numbering.service';
 
 @Injectable()
 export class ApprovalsService {
@@ -8,6 +9,7 @@ export class ApprovalsService {
     private readonly firebase: FirebaseService,
     @Inject(forwardRef(() => LineApiService))
     private readonly lineApi: LineApiService,
+    private readonly docNumbering: DocumentNumberingService,
   ) {}
 
   async submitQuotationForApproval(quotationId: string, submittedBy: string, tenantId: string = 'tenant_wrc_main') {
@@ -23,7 +25,8 @@ export class ApprovalsService {
       throw new BadRequestException('Quotation is already pending approval.');
     }
 
-    const requestRef = db.collection('approval_requests').doc();
+    const requestId = await this.docNumbering.generateDocumentNumber(tenantId, 'RE');
+    const requestRef = db.collection('approval_requests').doc(requestId);
     
     await requestRef.set({
       tenantId,
@@ -33,7 +36,7 @@ export class ApprovalsService {
       submittedAt: new Date(),
     });
 
-    return { id: requestRef.id, message: 'Approval request submitted successfully' };
+    return { id: requestId, message: 'Approval request submitted successfully' };
   }
 
   async approveRequest(requestId: string, approvedBy: string) {
@@ -96,6 +99,9 @@ export class ApprovalsService {
         itemsText += `• ${item.name} x ${item.quantity} = ฿${formatCurrency(item.total)}\n`;
       }
       
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api-e5mpppexfq-an.a.run.app/api';
+      const pdfUrl = `${apiBaseUrl}/quotations/${quotationData.id}/pdf`;
+      
       let pushText = `✅ ใบเสนอราคาได้รับการอนุมัติแล้วครับ\n\n`;
       pushText += `📄 เลขที่: ${quotationData.id}\n`;
       pushText += `📅 วันที่: ${dateStr}\n\n`;
@@ -105,7 +111,8 @@ export class ApprovalsService {
       pushText += `ยอดก่อน VAT: ฿${formatCurrency(quotationData.subtotal)}\n`;
       pushText += `VAT 7%: ฿${formatCurrency(quotationData.vat)}\n`;
       pushText += `ยอดรวมทั้งสิ้น: ฿${formatCurrency(quotationData.grandTotal)}\n\n`;
-      pushText += `✅ แอดมินอนุมัติเรียบร้อยแล้ว ลูกค้าสามารถยืนยันและดำเนินการชำระเงินได้เลยครับ`;
+      pushText += `📥 ดาวน์โหลดใบเสนอราคา (PDF):\n${pdfUrl}\n\n`;
+      pushText += `✅ แอดมินอนุมัติเรียบร้อยแล้ว ลูกค้าสามารถตรวจสอบใบเสนอราคาและคลิกยืนยันด้านล่างเพื่อสั่งซื้อได้เลยครับ`;
       
       await this.lineApi.pushMessage(quotationData.groupId, [
         {

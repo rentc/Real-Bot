@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FirebaseService } from '../../shared/firebase/firebase.service';
 import { PricesService } from '../prices/prices.service';
 import { MatchingService } from '../matching/matching.service';
+import { DocumentNumberingService } from '../pdf/document-numbering.service';
 
 @Injectable()
 export class QuotationsService {
@@ -9,6 +10,7 @@ export class QuotationsService {
     private readonly firebase: FirebaseService,
     private readonly pricesService: PricesService,
     private readonly matchingService: MatchingService,
+    private readonly docNumbering: DocumentNumberingService,
   ) {}
 
   async generateDraftQuotation(tenantId: string, groupId: string, userId: string, extractedItems: any[]) {
@@ -16,17 +18,18 @@ export class QuotationsService {
     let subtotal = 0;
 
     for (const item of extractedItems) {
+      const quantity = Number(item.quantity) || 1;
       const product: any = await this.matchingService.matchProduct(tenantId, item);
       if (product) {
         const price = await this.pricesService.getNetPrice(product, groupId, tenantId);
         if (price !== null) {
-          const itemTotal = price * item.quantity;
+          const itemTotal = price * quantity;
           subtotal += itemTotal;
           items.push({
             productId: product.id,
             name: product.name,
             sku: product.sku,
-            quantity: item.quantity,
+            quantity: quantity,
             unitPrice: price,
             total: itemTotal,
           });
@@ -36,6 +39,8 @@ export class QuotationsService {
 
     const vat = subtotal * 0.07;
     const grandTotal = subtotal + vat;
+
+    const quotationId = await this.docNumbering.generateDocumentNumber(tenantId, 'QT');
 
     const draftQuote = {
       tenantId,
@@ -49,7 +54,14 @@ export class QuotationsService {
       grandTotal,
     };
 
-    const docRef = await this.firebase.db.collection('quotations').add(draftQuote);
-    return { id: docRef.id, ...draftQuote };
+    const docRef = this.firebase.db.collection('quotations').doc(quotationId);
+    await docRef.set(draftQuote);
+    return { id: quotationId, ...draftQuote };
+  }
+
+  async findOne(id: string) {
+    const doc = await this.firebase.db.collection('quotations').doc(id).get();
+    if (!doc.exists) return null;
+    return { id: doc.id, ...doc.data() };
   }
 }

@@ -18,18 +18,17 @@ let GroupsService = class GroupsService {
     }
     async findAll() {
         const snapshot = await this.firebase.db.collection('lineGroups').orderBy('updatedAt', 'desc').get();
-        const groups = [];
-        for (const doc of snapshot.docs) {
+        const groups = await Promise.all(snapshot.docs.map(async (doc) => {
             const data = doc.data();
             const membershipsSnapshot = await doc.ref.collection('memberships').get();
-            groups.push({
+            return {
                 id: doc.id,
                 ...data,
                 _count: {
                     memberships: membershipsSnapshot.size,
                 }
-            });
-        }
+            };
+        }));
         return groups;
     }
     async findOne(id) {
