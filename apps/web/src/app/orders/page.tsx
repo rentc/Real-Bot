@@ -1,7 +1,16 @@
-import { fetchOrders } from '@/lib/api';
+import { fetchOrders, fetchGroups } from '@/lib/api';
 
 export default async function Orders() {
-  const orders = await fetchOrders();
+  const [orders, groups] = await Promise.all([
+    fetchOrders(),
+    fetchGroups().catch(() => [])
+  ]);
+
+  const getCustomerName = (id: string) => {
+    if (!id) return 'N/A';
+    const group = groups.find((g: any) => g.id === id || g.lineGroupId === id);
+    return group ? (group.groupName || group.name || id) : id;
+  };
 
   return (
     <div>
@@ -22,7 +31,7 @@ export default async function Orders() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'left' }}>
                 <th style={{ padding: '12px' }}>Order Number</th>
-                <th style={{ padding: '12px' }}>Customer ID</th>
+                <th style={{ padding: '12px' }}>Customer</th>
                 <th style={{ padding: '12px' }}>Total</th>
                 <th style={{ padding: '12px' }}>Status</th>
                 <th style={{ padding: '12px' }}>Payment</th>
@@ -33,7 +42,7 @@ export default async function Orders() {
               {orders.map((order: any) => (
                 <tr key={order.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '12px' }}>{order.orderNumber}</td>
-                  <td style={{ padding: '12px' }}>{order.customerId || 'N/A'}</td>
+                  <td style={{ padding: '12px' }}>{getCustomerName(order.customerId || order.groupId)}</td>
                   <td style={{ padding: '12px' }}>฿{order.total?.toLocaleString() || 0}</td>
                   <td style={{ padding: '12px' }}>
                     <span style={{ 
