@@ -15,9 +15,18 @@ export class GroupsService {
       const data = doc.data();
       const membershipsSnapshot = await doc.ref.collection('memberships').get();
       
+      let buyerProfile = null;
+      try {
+         const buyerDoc = await this.firebase.db.collection('buyerProfiles').doc(doc.id).get();
+         if (buyerDoc.exists) {
+            buyerProfile = buyerDoc.data();
+         }
+      } catch (e) {}
+
       return {
         id: doc.id,
         ...data,
+        buyerProfile,
         _count: {
           memberships: membershipsSnapshot.size,
         }

@@ -107,7 +107,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             await this.lineApi.reply(event.replyToken, [
                 {
                     type: 'text',
-                    text: '🤖 สวัสดีครับ ผมคือ WRC Sales Bot\n\nผมพร้อมช่วยเรื่องใบเสนอราคา สอบถามราคา และติดตามสถานะคำสั่งซื้อ\n\nพิมพ์ "ขอราคา NYY 4x6 100 เมตร" หรือใช้คำสั่ง #quote ได้เลยครับ',
+                    text: '🤖 สวัสดีครับ ผมคือ WRC Sales Bot / Hello, I am WRC Sales Bot\n\nผมพร้อมช่วยเรื่องใบเสนอราคา สอบถามราคา และติดตามสถานะคำสั่งซื้อ / I can help you with quotations, pricing, and tracking orders.\n\nพิมพ์ "ขอราคา NYY 4x6 100 เมตร" หรือใช้คำสั่ง #quote ได้เลยครับ / Type "Quote NYY 4x6 100m" or use the #quote command.',
                 },
             ]);
         }
@@ -168,6 +168,9 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         else if (message.type === 'image') {
             await this.handleImageMessage(event, message.id, groupId, userId);
         }
+        else if (message.type === 'file') {
+            await this.handleFileMessage(event, message, groupId, userId);
+        }
     }
     isRelevantMessage(message) {
         if (!message)
@@ -189,6 +192,9 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         if (message.type === 'image') {
             return true;
         }
+        if (message.type === 'file' && message.fileName && message.fileName.toLowerCase().endsWith('.pdf')) {
+            return true;
+        }
         return false;
     }
     async handleImageMessage(event, messageId, groupId, userId) {
@@ -196,45 +202,67 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         if (!replyToken)
             return;
         const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
-        if (!pendingOrder) {
-            return;
-        }
         try {
             const imageBuffer = await this.lineApi.getContent(messageId);
-            const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
-            if (verificationResult.isSlip) {
-                const orderTotal = pendingOrder.total;
-                const slipAmount = verificationResult.amount || orderTotal;
-                if (true || Math.abs(slipAmount - orderTotal) < 1) {
-                    let slipUrl = '';
-                    try {
-                        const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
-                        const file = this.firebase.storage.file(fileName);
-                        await file.save(imageBuffer, {
-                            metadata: { contentType: 'image/jpeg' }
-                        });
-                        await file.makePublic();
-                        slipUrl = `https://storage.googleapis.com/${this.firebase.storage.name}/${fileName}`;
+            let isSlip = false;
+            if (pendingOrder) {
+                const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
+                isSlip = verificationResult.isSlip;
+                if (isSlip) {
+                    const orderTotal = pendingOrder.total;
+                    const slipAmount = verificationResult.amount || orderTotal;
+                    if (true || Math.abs(slipAmount - orderTotal) < 1) {
+                        let slipUrl = '';
+                        try {
+                            const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
+                            const file = this.firebase.storage.file(fileName);
+                            await file.save(imageBuffer, {
+                                metadata: { contentType: 'image/jpeg' }
+                            });
+                            await file.makePublic();
+                            slipUrl = `https://storage.googleapis.com/${this.firebase.storage.name}/${fileName}`;
+                        }
+                        catch (uploadError) {
+                            this.logger.error('Failed to upload slip image', uploadError);
+                        }
+                        await this.ordersService.markOrderPaid(pendingOrder.id, verificationResult, slipUrl);
+                        await this.lineApi.reply(replyToken, [{
+                                type: 'text',
+                                text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ / Payment proof received.\nหมายเลขคำสั่งซื้อ (Order Number): ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ (Amount Detected): ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ / Admin will review and confirm shortly.`
+                            }]);
                     }
-                    catch (uploadError) {
-                        this.logger.error('Failed to upload slip image', uploadError);
+                    else {
+                        await this.lineApi.reply(replyToken, [{
+                                type: 'text',
+                                text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber}) / Slip detected, but amount does not match the order.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.`
+                            }]);
                     }
-                    await this.ordersService.markOrderPaid(pendingOrder.id, verificationResult, slipUrl);
-                    await this.lineApi.reply(replyToken, [{
-                            type: 'text',
-                            text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ\nหมายเลขคำสั่งซื้อ: ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ: ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ`
-                        }]);
                 }
-                else {
-                    await this.lineApi.reply(replyToken, [{
-                            type: 'text',
-                            text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber})\nยอดที่ต้องชำระ: ฿${orderTotal}\nยอดในสลิป: ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ`
-                        }]);
+            }
+            if (!isSlip) {
+                const extraction = await this.aiService.extractQuotationFromMedia(imageBuffer, 'image/jpeg');
+                if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE') {
+                    await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction);
                 }
             }
         }
         catch (e) {
             this.logger.error('Error handling image message', e);
+        }
+    }
+    async handleFileMessage(event, message, groupId, userId) {
+        const replyToken = event.replyToken;
+        if (!replyToken)
+            return;
+        try {
+            const fileBuffer = await this.lineApi.getContent(message.id);
+            const extraction = await this.aiService.extractQuotationFromMedia(fileBuffer, 'application/pdf');
+            if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE') {
+                await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction);
+            }
+        }
+        catch (e) {
+            this.logger.error('Error handling file message', e);
         }
     }
     async handleTextMessage(event, text, groupId, userId) {
@@ -244,72 +272,80 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             if (text.startsWith('#order')) {
                 const parts = text.split(' ');
                 if (parts.length < 2) {
-                    await this.lineApi.reply(replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ (เช่น #order QT-123)' }]);
+                    await this.lineApi.reply(replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ / Please specify the quotation number to order (e.g. #order QT-123)' }]);
                     return;
                 }
                 const quotationId = parts[1];
                 try {
                     const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
-                    await this.lineApi.reply(replyToken, [{ type: 'text', text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ\nหมายเลขคำสั่งซื้อ: ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ` }]);
+                    await this.lineApi.reply(replyToken, [{
+                            type: 'text',
+                            text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ / Order confirmed successfully.\nหมายเลขคำสั่งซื้อ (Order Number): ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ / Admin will contact you shortly.\n\nสามารถชำระเงินได้ที่ (Payment Details):\nธนาคารกสิกรไทย (Kasikornbank)\nชื่อบัญชี (Account Name): บจก.วรรณรัฐชาติ วิศวกรรม\nเลขที่บัญชี (Account No): 117-8-14118-6`
+                        }]);
                 }
                 catch (e) {
                     this.logger.error('Error creating order', e);
-                    await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ' }]);
+                    await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ / Error creating order. Please ensure the quotation is approved.' }]);
                 }
                 return;
             }
             const extraction = await this.aiService.extractQuotationRequest(text);
             if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ราคา')) {
-                if (extraction.items && extraction.items.length > 0) {
-                    try {
-                        const tenantId = 'tenant_wrc_main';
-                        const quote = await this.quotationsService.generateDraftQuotation(tenantId, groupId, userId, extraction.items);
-                        await this.approvalsService.submitQuotationForApproval(quote.id, userId, tenantId);
-                        let replyText = `📝 สร้างใบเสนอราคา (Draft) เรียบร้อยแล้ว\n`;
-                        replyText += `หมายเลขอ้างอิง: ${quote.id}\n\n`;
-                        replyText += `รายการ:\n`;
-                        const formatCurrency = (amount) => {
-                            return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        };
-                        for (const item of quote.items) {
-                            replyText += `- ${item.name} x ${item.quantity} = ${formatCurrency(item.total)} บาท\n`;
-                        }
-                        const userProfile = await this.lineApi.getGroupMemberProfile(groupId, userId);
-                        const displayName = userProfile?.displayName || 'ลูกค้า';
-                        replyText += `\nยอดรวม: ${formatCurrency(quote.subtotal)} บาท\n`;
-                        replyText += `VAT 7%: ${formatCurrency(quote.vat)} บาท\n`;
-                        replyText += `ยอดสุทธิ: ${formatCurrency(quote.grandTotal)} บาท`;
-                        let adminMessage = `⚠️ มีใบเสนอราคาใหม่รอการอนุมัติ\n`;
-                        adminMessage += `ผู้ขอ: ⚙️ ${displayName}\n\n`;
-                        adminMessage += `แอดมินสามารถตรวจสอบและอนุมัติได้ที่:\n`;
-                        adminMessage += `https://real-bot-6a793.web.app/quotations`;
-                        await this.lineApi.reply(replyToken, [
-                            { type: 'text', text: replyText },
-                            { type: 'text', text: adminMessage }
-                        ]);
-                    }
-                    catch (e) {
-                        this.logger.error('Error generating quotation', e);
-                        await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง' }]);
-                    }
-                }
-                else {
-                    await this.lineApi.reply(replyToken, [
-                        {
-                            type: 'text',
-                            text: 'ผมไม่พบข้อมูลสินค้าที่ต้องการขอราคา กรุณาระบุ ชนิด ขนาด และจำนวน เช่น "ขอราคา NYY 4x6 100 เมตร"',
-                        },
-                    ]);
-                }
+                await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction, true);
             }
             else {
                 await this.lineApi.reply(replyToken, [
                     {
                         type: 'text',
-                        text: '🤖 รับทราบครับ หากต้องการใบเสนอราคาพิมพ์ว่า "ขอราคา [สินค้า]" ได้เลยครับ',
+                        text: '🤖 รับทราบครับ หากต้องการใบเสนอราคาพิมพ์ว่า "ขอราคา [สินค้า]" ได้เลยครับ / Understood. If you need a quotation, please type "Quote [Product]".',
                     },
                 ]);
             }
+        }
+    }
+    async processQuotationRequest(tenantId, groupId, userId, replyToken, extraction, isText = false) {
+        if (extraction.items && extraction.items.length > 0) {
+            try {
+                const quote = await this.quotationsService.generateDraftQuotation(tenantId, groupId, userId, extraction.items);
+                await this.approvalsService.submitQuotationForApproval(quote.id, userId, tenantId);
+                let replyText = `📝 สร้างใบเสนอราคา (Draft) เรียบร้อยแล้ว / Quotation (Draft) created\n`;
+                replyText += `หมายเลขอ้างอิง (Ref No): ${quote.id}\n\n`;
+                replyText += `รายการ (Items):\n`;
+                const formatCurrency = (amount) => {
+                    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                };
+                for (const item of quote.items) {
+                    replyText += `- ${item.name} x ${item.quantity} = ฿${formatCurrency(item.total)}\n`;
+                    if (item.note) {
+                        replyText += `  *หมายเหตุ (Note): ${item.note}*\n`;
+                    }
+                }
+                const userProfile = await this.lineApi.getGroupMemberProfile(groupId, userId);
+                const displayName = userProfile?.displayName || 'ลูกค้า / Customer';
+                replyText += `\nยอดรวม (Subtotal): ฿${formatCurrency(quote.subtotal)}\n`;
+                replyText += `VAT 7%: ฿${formatCurrency(quote.vat)}\n`;
+                replyText += `ยอดสุทธิ (Grand Total): ฿${formatCurrency(quote.grandTotal)}`;
+                let adminMessage = `⚠️ มีใบเสนอราคาใหม่รอการอนุมัติ / New quotation pending approval\n`;
+                adminMessage += `ผู้ขอ (Requested by): ⚙️ ${displayName}\n\n`;
+                adminMessage += `แอดมินสามารถตรวจสอบและอนุมัติได้ที่ / Admin can review and approve here:\n`;
+                adminMessage += `https://real-bot-6a793.web.app/quotations`;
+                await this.lineApi.reply(replyToken, [
+                    { type: 'text', text: replyText },
+                    { type: 'text', text: adminMessage }
+                ]);
+            }
+            catch (e) {
+                this.logger.error('Error generating quotation', e);
+                await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างใบเสนอราคา กรุณาลองใหม่อีกครั้ง / Error generating quotation. Please try again.' }]);
+            }
+        }
+        else if (isText) {
+            await this.lineApi.reply(replyToken, [
+                {
+                    type: 'text',
+                    text: 'ผมไม่พบข้อมูลสินค้าที่ต้องการขอราคา กรุณาระบุ ชนิด ขนาด และจำนวน เช่น "ขอราคา NYY 4x6 100 เมตร" หรือแนบรูปภาพ/เอกสาร / I could not find the product details. Please specify type, size, and quantity (e.g. "Quote NYY 4x6 100m"), or attach a document.',
+                },
+            ]);
         }
     }
     async upsertSender(groupId, lineUserId) {

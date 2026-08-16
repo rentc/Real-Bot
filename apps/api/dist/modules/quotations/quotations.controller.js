@@ -25,7 +25,7 @@ let QuotationsController = class QuotationsController {
         this.pdfService = pdfService;
         this.firebase = firebase;
     }
-    async getQuotationPdf(id, res) {
+    async getQuotationPdf(id, mode, res) {
         const quotation = await this.quotationsService.findOne(id);
         if (!quotation) {
             throw new common_1.NotFoundException(`Quotation with ID ${id} not found`);
@@ -48,13 +48,30 @@ let QuotationsController = class QuotationsController {
             subtotal: quotation.subtotal || 0,
             vat: quotation.vat || 0,
             total: quotation.grandTotal || 0,
+            isEditMode: mode === 'edit',
         };
         const htmlContent = (0, wrc_quotation_template_1.wrcQuotationTemplate)(templateData);
-        const htmlWithPrint = htmlContent.replace('</body>', '<script>window.onload = function() { window.print(); }</script></body>');
         res.set({
             'Content-Type': 'text/html; charset=utf-8',
         });
-        res.end(htmlWithPrint);
+        res.end(htmlContent);
+    }
+    async updateQuotation(id, body) {
+        const quotation = await this.quotationsService.findOne(id);
+        if (!quotation) {
+            throw new common_1.NotFoundException(`Quotation with ID ${id} not found`);
+        }
+        const { items, subtotal, vat, grandTotal } = body;
+        const updateData = {};
+        if (items !== undefined)
+            updateData.items = items;
+        if (subtotal !== undefined)
+            updateData.subtotal = subtotal;
+        if (vat !== undefined)
+            updateData.vat = vat;
+        if (grandTotal !== undefined)
+            updateData.grandTotal = grandTotal;
+        return this.quotationsService.updateQuotation(id, updateData);
     }
 };
 exports.QuotationsController = QuotationsController;
@@ -63,11 +80,22 @@ __decorate([
     (0, swagger_1.ApiOperation)({ summary: 'Get a quotation PDF by ID' }),
     (0, swagger_1.ApiParam)({ name: 'id', description: 'Quotation ID' }),
     __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Res)()),
+    __param(1, (0, common_1.Query)('mode')),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], QuotationsController.prototype, "getQuotationPdf", null);
+__decorate([
+    (0, common_1.Put)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update a quotation' }),
+    (0, swagger_1.ApiParam)({ name: 'id', description: 'Quotation ID' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
-], QuotationsController.prototype, "getQuotationPdf", null);
+], QuotationsController.prototype, "updateQuotation", null);
 exports.QuotationsController = QuotationsController = __decorate([
     (0, swagger_1.ApiTags)('quotations'),
     (0, common_1.Controller)('quotations'),

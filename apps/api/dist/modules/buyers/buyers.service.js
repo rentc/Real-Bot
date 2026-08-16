@@ -30,6 +30,15 @@ let BuyersService = class BuyersService {
             tenantId: data.tenantId || 'tenant_wrc_main',
             updatedAt: new Date(),
         }, { merge: true });
+        try {
+            await this.firebase.db.collection('lineGroups').doc(groupId).update({
+                status: 'ACTIVE',
+                updatedAt: new Date(),
+            });
+        }
+        catch (e) {
+            console.error('Failed to update group status to ACTIVE', e);
+        }
         const updated = await ref.get();
         return { id: updated.id, ...updated.data() };
     }

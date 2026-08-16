@@ -71,6 +71,58 @@ Examples:
             return { intent: 'OTHER', items: [], debug_error: e.message || String(e), debug_raw: rawText };
         }
     }
+    async extractQuotationFromMedia(mediaBuffer, mimeType) {
+        this.logger.log(`Extracting quotation from media (${mimeType})...`);
+        const prompt = `You are an AI assistant for a Thai electrical cable supplier.
+Your task is to extract cable requests from the attached image/document.
+Return a JSON object containing:
+- "intent": "QUOTE", "PRICE", "STOCK", or "OTHER"
+- "items": array of objects with "type" (e.g. "NYY", "VCT"), "size" (e.g. "4x6", "4x4"), and "quantity" (number).
+If the image doesn't contain a request for cables or pricing, return "intent": "OTHER".`;
+        let rawText = '{}';
+        try {
+            const response = await this.ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    prompt,
+                    {
+                        inlineData: {
+                            data: mediaBuffer.toString('base64'),
+                            mimeType: mimeType
+                        }
+                    }
+                ],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: genai_1.Type.OBJECT,
+                        properties: {
+                            intent: { type: genai_1.Type.STRING, enum: ['QUOTE', 'PRICE', 'STOCK', 'OTHER'] },
+                            items: {
+                                type: genai_1.Type.ARRAY,
+                                items: {
+                                    type: genai_1.Type.OBJECT,
+                                    properties: {
+                                        type: { type: genai_1.Type.STRING, description: "Cable type e.g. NYY, THW, VCT" },
+                                        size: { type: genai_1.Type.STRING, description: "Size e.g. 4x6, 2x2.5" },
+                                        quantity: { type: genai_1.Type.NUMBER, description: "Amount requested" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            rawText = response.text || '{}';
+            rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const result = JSON.parse(rawText);
+            return result;
+        }
+        catch (e) {
+            this.logger.error('Failed to extract quotation from media', e);
+            return { intent: 'OTHER', items: [], debug_error: e.message || String(e), debug_raw: rawText };
+        }
+    }
     async verifyPaymentSlip(imageBuffer, mimeType = 'image/jpeg') {
         this.logger.log('Verifying payment slip with Gemini Vision...');
         try {

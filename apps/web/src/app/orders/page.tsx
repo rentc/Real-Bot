@@ -42,7 +42,7 @@ export default async function Orders() {
               {orders.map((order: any) => (
                 <tr key={order.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '12px' }}>{order.orderNumber}</td>
-                  <td style={{ padding: '12px' }}>{getCustomerName(order.customerId || order.groupId)}</td>
+                  <td style={{ padding: '12px' }}>{order.customerName || getCustomerName(order.customerId || order.groupId)}</td>
                   <td style={{ padding: '12px' }}>฿{order.total?.toLocaleString() || 0}</td>
                   <td style={{ padding: '12px' }}>
                     <span style={{ 

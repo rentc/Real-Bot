@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -18,7 +18,8 @@ export default function CustomerDetailClient({
   initialOverrides: any[];
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>('buyer');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'buyer');
 
   // --- Buyer Details State ---
   const [buyerForm, setBuyerForm] = useState({

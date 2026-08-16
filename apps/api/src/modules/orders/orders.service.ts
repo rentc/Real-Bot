@@ -109,7 +109,24 @@ export class OrdersService {
       
     // Filter by tenantId in memory to avoid composite index requirement
     const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-    return allOrders.filter(order => order.tenantId === tenantId).slice(0, 50);
+    const tenantOrders = allOrders.filter(order => order.tenantId === tenantId).slice(0, 50);
+    
+    const ordersWithCustomerName = await Promise.all(tenantOrders.map(async (order: any) => {
+        let customerName = null;
+        if (order.groupId) {
+            try {
+                const buyerDoc = await this.firebase.db.collection('buyerProfiles').doc(order.groupId).get();
+                if (buyerDoc.exists) {
+                    const buyerData = buyerDoc.data();
+                    customerName = buyerData?.companyName || null;
+                }
+            } catch (e) {}
+        }
+        order.customerName = customerName;
+        return order;
+    }));
+    
+    return ordersWithCustomerName;
   }
 
   async findPendingOrderForGroup(groupId: string, tenantId: string = 'tenant_wrc_main') {

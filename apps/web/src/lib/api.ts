@@ -180,3 +180,20 @@ export async function activateAllProducts() {
     throw error;
   }
 }
+
+export async function updateQuotation(id: string, data: any) {
+  const res = await fetch(`${API_URL}/quotations/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to update quotation');
+  }
+
+  return await res.json();
+}

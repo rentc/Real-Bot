@@ -23,15 +23,25 @@ export class QuotationsService {
       if (product) {
         const price = await this.pricesService.getNetPrice(product, groupId, tenantId);
         if (price !== null) {
-          const itemTotal = price * quantity;
+          let itemTotal = price * quantity;
+          let unitPrice = price;
+          let note = null;
+
+          if (product.quantity !== undefined && quantity > product.quantity) {
+             itemTotal = 0;
+             unitPrice = 0;
+             note = `จำนวนสินค้าไม่เพียงพอ (คงเหลือ ${product.quantity})`;
+          }
+
           subtotal += itemTotal;
           items.push({
             productId: product.id,
             name: product.name,
             sku: product.sku,
             quantity: quantity,
-            unitPrice: price,
+            unitPrice: unitPrice,
             total: itemTotal,
+            ...(note && { note }),
           });
         }
       }
@@ -63,5 +73,14 @@ export class QuotationsService {
     const doc = await this.firebase.db.collection('quotations').doc(id).get();
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() };
+  }
+
+  async updateQuotation(id: string, data: any) {
+    const ref = this.firebase.db.collection('quotations').doc(id);
+    await ref.update({
+      ...data,
+      updatedAt: new Date(),
+    });
+    return this.findOne(id);
   }
 }

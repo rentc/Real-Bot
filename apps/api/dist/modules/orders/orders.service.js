@@ -98,7 +98,23 @@ let OrdersService = class OrdersService {
             .limit(100)
             .get();
         const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        return allOrders.filter(order => order.tenantId === tenantId).slice(0, 50);
+        const tenantOrders = allOrders.filter(order => order.tenantId === tenantId).slice(0, 50);
+        const ordersWithCustomerName = await Promise.all(tenantOrders.map(async (order) => {
+            let customerName = null;
+            if (order.groupId) {
+                try {
+                    const buyerDoc = await this.firebase.db.collection('buyerProfiles').doc(order.groupId).get();
+                    if (buyerDoc.exists) {
+                        const buyerData = buyerDoc.data();
+                        customerName = buyerData?.companyName || null;
+                    }
+                }
+                catch (e) { }
+            }
+            order.customerName = customerName;
+            return order;
+        }));
+        return ordersWithCustomerName;
     }
     async findPendingOrderForGroup(groupId, tenantId = 'tenant_wrc_main') {
         const snapshot = await this.firebase.db.collection('orders')

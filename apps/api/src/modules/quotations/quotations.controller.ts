@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Put, Body, Param, Res, NotFoundException, Query } from '@nestjs/common';
 import { Response } from 'express';
 import { QuotationsService } from './quotations.service';
 import { PdfService } from '../pdf/pdf.service';
@@ -18,7 +18,7 @@ export class QuotationsController {
   @Get(':id/pdf')
   @ApiOperation({ summary: 'Get a quotation PDF by ID' })
   @ApiParam({ name: 'id', description: 'Quotation ID' })
-  async getQuotationPdf(@Param('id') id: string, @Res() res: Response) {
+  async getQuotationPdf(@Param('id') id: string, @Query('mode') mode: string, @Res() res: Response) {
     const quotation: any = await this.quotationsService.findOne(id);
     if (!quotation) {
       throw new NotFoundException(`Quotation with ID ${id} not found`);
@@ -44,17 +44,34 @@ export class QuotationsController {
       subtotal: quotation.subtotal || 0,
       vat: quotation.vat || 0,
       total: quotation.grandTotal || 0, 
+      isEditMode: mode === 'edit',
     };
 
     const htmlContent = wrcQuotationTemplate(templateData);
-
-    // Return HTML directly and trigger print dialog for the user
-    const htmlWithPrint = htmlContent.replace('</body>', '<script>window.onload = function() { window.print(); }</script></body>');
 
     res.set({
       'Content-Type': 'text/html; charset=utf-8',
     });
 
-    res.end(htmlWithPrint);
+    res.end(htmlContent);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update a quotation' })
+  @ApiParam({ name: 'id', description: 'Quotation ID' })
+  async updateQuotation(@Param('id') id: string, @Body() body: any) {
+    const quotation = await this.quotationsService.findOne(id);
+    if (!quotation) {
+      throw new NotFoundException(`Quotation with ID ${id} not found`);
+    }
+
+    const { items, subtotal, vat, grandTotal } = body;
+    const updateData: any = {};
+    if (items !== undefined) updateData.items = items;
+    if (subtotal !== undefined) updateData.subtotal = subtotal;
+    if (vat !== undefined) updateData.vat = vat;
+    if (grandTotal !== undefined) updateData.grandTotal = grandTotal;
+
+    return this.quotationsService.updateQuotation(id, updateData);
   }
 }

@@ -42,6 +42,34 @@ export const wrcQuotationTemplate = (data: any): string => {
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .container { width: 100%; max-width: none; border: none; padding: 0; }
+          .no-print { display: none !important; }
+        }
+        .floating-btn {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #5c7cfa;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          z-index: 1000;
+          font-family: inherit;
+        }
+        .floating-btn:hover { background: #4c6ef5; }
+        .edit-banner {
+          text-align: center;
+          padding: 10px;
+          background: #fff3cd;
+          color: #856404;
+          font-weight: bold;
+          margin-bottom: 20px;
+          border: 1px solid #ffeeba;
+          border-radius: 4px;
         }
         .container { 
           width: 100%; 
@@ -81,17 +109,6 @@ export const wrcQuotationTemplate = (data: any): string => {
         .doc-title-container { flex: 1; text-align: right; }
         .doc-title { font-size: 24px; font-weight: bold; margin: 0; }
         .page-num { font-size: 11px; margin-top: 5px; }
-        .qr-placeholder { 
-          width: 50px; 
-          height: 50px; 
-          border: 1px solid #000; 
-          display: inline-block; 
-          margin-top: 10px; 
-          line-height: 50px; 
-          text-align: center; 
-          font-size: 9px;
-          background: #f0f0f0;
-        }
         
         .info-boxes { display: flex; gap: 10px; margin-bottom: 15px; }
         .info-box { 
@@ -155,8 +172,16 @@ export const wrcQuotationTemplate = (data: any): string => {
         .sig-date { position: absolute; bottom: 10px; left: 15px; right: 15px; text-align: left; font-size: 11px; }
       </style>
     </head>
-    <body>
+    <body ${data.isEditMode ? 'contenteditable="true"' : ''}>
+      ${data.isEditMode ? `
+        <button class="no-print floating-btn" onclick="window.print()" contenteditable="false">🖨️ Print / Save to PDF</button>
+      ` : ''}
       <div class="container">
+        ${data.isEditMode ? `
+        <div class="no-print edit-banner" contenteditable="false">
+          💡 You can edit any text in this document simply by clicking and typing. When you're ready, click the Print button!
+        </div>
+        ` : ''}
         
         <div class="header-top">
           <div class="company-info">
@@ -175,7 +200,6 @@ export const wrcQuotationTemplate = (data: any): string => {
           <div class="doc-title-container">
             <h1 class="doc-title">ใบเสนอราคา</h1>
             <div class="page-num">หน้า 1 / 1</div>
-            <div class="qr-placeholder">QR Code</div>
           </div>
         </div>
         

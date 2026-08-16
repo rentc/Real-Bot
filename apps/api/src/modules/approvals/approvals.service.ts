@@ -97,6 +97,9 @@ export class ApprovalsService {
 
       for (const item of (quotationData.items || [])) {
         itemsText += `• ${item.name} x ${item.quantity} = ฿${formatCurrency(item.total)}\n`;
+        if (item.note) {
+          itemsText += `  *หมายเหตุ: ${item.note}*\n`;
+        }
       }
       
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api-e5mpppexfq-an.a.run.app/api';
@@ -196,6 +199,14 @@ export class ApprovalsService {
         const quotationDoc = await this.firebase.db.collection('quotations').doc(req.quotationId).get();
         if (quotationDoc.exists) {
           req.quotation = { id: quotationDoc.id, ...quotationDoc.data() };
+          
+          if (req.quotation.groupId) {
+             const buyerDoc = await this.firebase.db.collection('buyerProfiles').doc(req.quotation.groupId).get();
+             if (buyerDoc.exists) {
+                const buyerData = buyerDoc.data();
+                req.customerName = buyerData?.companyName || null;
+             }
+          }
         }
       } catch (e) {
         console.error(`Failed to fetch quotation details for ${req.quotationId}`, e);
@@ -222,6 +233,14 @@ export class ApprovalsService {
         const quotationDoc = await this.firebase.db.collection('quotations').doc(req.quotationId).get();
         if (quotationDoc.exists) {
           req.quotation = { id: quotationDoc.id, ...quotationDoc.data() };
+          
+          if (req.quotation.groupId) {
+             const buyerDoc = await this.firebase.db.collection('buyerProfiles').doc(req.quotation.groupId).get();
+             if (buyerDoc.exists) {
+                const buyerData = buyerDoc.data();
+                req.customerName = buyerData?.companyName || null;
+             }
+          }
         }
       } catch (e) {
         console.error(`Failed to fetch quotation details for ${req.quotationId}`, e);

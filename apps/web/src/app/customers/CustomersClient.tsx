@@ -76,7 +76,14 @@ export default function CustomersClient({ groups }: { groups: any[] }) {
                       {group.status || 'PENDING'}
                     </span>
                   </td>
-                  <td style={{ padding: '14px 12px', textAlign: 'right' }}>
+                  <td style={{ padding: '14px 12px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => router.push(`/customers/${group.id}?tab=pricing`)}
+                      className="btn-secondary"
+                      style={{ padding: '8px 16px', fontSize: '13px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                    >
+                      💰 Pricing
+                    </button>
                     <button
                       onClick={() => router.push(`/customers/${group.id}`)}
                       className="btn-primary"
