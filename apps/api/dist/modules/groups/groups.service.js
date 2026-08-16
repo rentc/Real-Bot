@@ -34,7 +34,7 @@ let GroupsService = class GroupsService {
                 ...data,
                 buyerProfile,
                 _count: {
-                    memberships: membershipsSnapshot.size,
+                    memberships: data.memberCount || membershipsSnapshot.size,
                 }
             };
         }));

@@ -115,10 +115,12 @@ export class LineWebhookService {
 
     this.logger.log(`Bot joined group: ${groupId}`);
     const groupSummary = await this.lineApi.getGroupSummary(groupId);
+    const memberCount = await this.lineApi.getGroupMemberCount(groupId);
 
     await this.firebase.db.collection('lineGroups').doc(groupId).set({
       lineGroupId: groupId,
       groupName: groupSummary?.groupName || null,
+      memberCount: memberCount || 0,
       status: 'PENDING_CONFIGURATION',
       botJoinedAt: new Date(),
       updatedAt: new Date(),
@@ -130,7 +132,50 @@ export class LineWebhookService {
           type: 'text',
           text: '🤖 สวัสดีครับ ผมคือ WRC Sales Bot / Hello, I am WRC Sales Bot\n\nผมพร้อมช่วยเรื่องใบเสนอราคา สอบถามราคา และติดตามสถานะคำสั่งซื้อ / I can help you with quotations, pricing, and tracking orders.\n\nพิมพ์ "ขอราคา NYY 4x6 100 เมตร" หรือใช้คำสั่ง #quote ได้เลยครับ / Type "Quote NYY 4x6 100m" or use the #quote command.',
         },
+        {
+          type: 'text',
+          text: '⚠️ เพื่อให้ระบบรู้จักและสามารถกำหนดสิทธิ์การสั่งซื้อให้คุณได้ กรุณาพิมพ์ทักทาย (เช่น "สวัสดี" หรือ "Hi") เข้ามาในกลุ่มนี้คนละ 1 ข้อความครับ / To help me recognize you and assign proper roles, please have everyone send a quick greeting (like "Hi" or "Hello") in this group!',
+        }
       ]);
+    }
+
+    // Sweep all existing members asynchronously so it doesn't block
+    this.sweepGroupMembers(groupId).catch(err => {
+      this.logger.error(`Failed to sweep group members for ${groupId}`, err);
+    });
+  }
+
+  private async sweepGroupMembers(groupId: string): Promise<void> {
+    this.logger.log(`Sweeping existing members for group ${groupId}`);
+    const memberIds = await this.lineApi.getAllGroupMemberIds(groupId);
+    this.logger.log(`Found ${memberIds.length} members in group ${groupId}`);
+
+    const batch = this.firebase.db.batch();
+    const groupMembershipsRef = this.firebase.db.collection('lineGroups').doc(groupId).collection('memberships');
+
+    for (const userId of memberIds) {
+      // 1. We also need to upsert the sender profile to lineUsers
+      // But fetching profiles for all members could hit rate limits, so we only save the ID for now
+      // and update the display name later when they interact, or we could fetch here.
+      // Let's just save basic info to memberships and lineUsers without the heavy profile fetch for each.
+      const userRef = this.firebase.db.collection('lineUsers').doc(userId);
+      batch.set(userRef, {
+        lineUserId: userId,
+        updatedAt: new Date(),
+      }, { merge: true });
+
+      const membershipRef = groupMembershipsRef.doc(userId);
+      batch.set(membershipRef, {
+        lineUserId: userId,
+        lineGroupId: groupId,
+        isActive: true,
+        updatedAt: new Date(),
+      }, { merge: true });
+    }
+
+    if (memberIds.length > 0) {
+      await batch.commit();
+      this.logger.log(`Successfully swept ${memberIds.length} members for group ${groupId}`);
     }
   }
 
@@ -215,7 +260,7 @@ export class LineWebhookService {
         return true;
       }
 
-      const businessKeywords = ['ราคา', 'เช็คสต๊อก'];
+      const businessKeywords = ['ราคา', 'เช็คสต๊อก', 'quote', 'price'];
       if (businessKeywords.some((kw) => text.includes(kw))) {
         return true;
       }
@@ -250,9 +295,17 @@ export class LineWebhookService {
         if (isSlip) {
           // DEMO: Pretend the amount is the same as quotation
           const orderTotal = pendingOrder.total;
-          const slipAmount = verificationResult.amount || orderTotal;
+          const slipAmount = verificationResult.amount || 0;
+          const receiverName = (verificationResult.receiverName || '').toLowerCase();
           
-          if (true || Math.abs(slipAmount - orderTotal) < 1) {
+          // Check if receiver name contains expected keywords
+          const isValidName = receiverName.includes('วรรณรัฐชาติ') || 
+                              receiverName.includes('วิศวกรรม') || 
+                              receiverName.includes('wannaratchat');
+                              
+          const isValidAmount = Math.abs(slipAmount - orderTotal) < 1;
+
+          if (isValidAmount && isValidName) {
             // Upload slip to Firebase Storage
             let slipUrl = '';
             try {
@@ -275,7 +328,7 @@ export class LineWebhookService {
           } else {
             await this.lineApi.reply(replyToken as string, [{ 
               type: 'text', 
-              text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber}) / Slip detected, but amount does not match the order.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.` 
+              text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินหรือชื่อบัญชีไม่ถูกต้อง (${pendingOrder.orderNumber}) / Slip detected, but amount or account name is incorrect.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nชื่อบัญชีรับโอน (Receiver Name): ${verificationResult.receiverName || 'ไม่ทราบ'}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.` 
             }]);
           }
         }
@@ -340,7 +393,8 @@ export class LineWebhookService {
       // 2. Use AI to extract intent and items
       const extraction = await this.aiService.extractQuotationRequest(text);
       
-      if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ราคา')) {
+      const isQuotationKeyword = text.includes('ราคา') || text.toLowerCase().includes('quote') || text.toLowerCase().includes('price');
+      if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || isQuotationKeyword) {
         await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken as string, extraction, true);
       } else {
         await this.lineApi.reply(replyToken as string, [
@@ -437,13 +491,22 @@ export class LineWebhookService {
       // Update group name at most once every hour (3600000 ms)
       if (now - lastUpdate > 3600000) {
         const summary = await this.lineApi.getGroupSummary(groupId);
+        const memberCount = await this.lineApi.getGroupMemberCount(groupId);
+        
+        let updates: any = {
+          groupSummaryUpdatedAt: new Date(),
+        };
+        
         if (summary && summary.groupName) {
-          await groupRef.update({
-            groupName: summary.groupName,
-            pictureUrl: summary.pictureUrl || null,
-            groupSummaryUpdatedAt: new Date(),
-          });
+          updates.groupName = summary.groupName;
+          updates.pictureUrl = summary.pictureUrl || null;
         }
+        
+        if (memberCount !== null) {
+          updates.memberCount = memberCount;
+        }
+        
+        await groupRef.set(updates, { merge: true });
       }
     } catch (e) {
       this.logger.error('Error in upsertGroup', e);

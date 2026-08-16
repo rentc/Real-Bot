@@ -197,3 +197,36 @@ export async function updateQuotation(id: string, data: any) {
 
   return await res.json();
 }
+
+export async function fetchOverrides(groupId: string, tenantId: string = 'tenant_wrc_main') {
+  try {
+    const res = await fetch(`${API_URL}/prices/overrides?groupId=${groupId}&tenantId=${tenantId}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch overrides');
+    return await res.json();
+  } catch (error) {
+    console.error('Error fetching overrides:', error);
+    return [];
+  }
+}
+
+export async function setOverride(groupId: string, productId: string, discount: number, tenantId: string = 'tenant_wrc_main') {
+  try {
+    const res = await fetch(`${API_URL}/prices/overrides`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        groupId,
+        productId,
+        tenantId,
+        finalDiscount: discount
+      })
+    });
+    if (!res.ok) throw new Error('Failed to set override');
+    return await res.json();
+  } catch (error) {
+    console.error('Error setting override:', error);
+    throw error;
+  }
+}

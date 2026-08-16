@@ -96,9 +96,11 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             return;
         this.logger.log(`Bot joined group: ${groupId}`);
         const groupSummary = await this.lineApi.getGroupSummary(groupId);
+        const memberCount = await this.lineApi.getGroupMemberCount(groupId);
         await this.firebase.db.collection('lineGroups').doc(groupId).set({
             lineGroupId: groupId,
             groupName: groupSummary?.groupName || null,
+            memberCount: memberCount || 0,
             status: 'PENDING_CONFIGURATION',
             botJoinedAt: new Date(),
             updatedAt: new Date(),
@@ -109,7 +111,39 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                     type: 'text',
                     text: '🤖 สวัสดีครับ ผมคือ WRC Sales Bot / Hello, I am WRC Sales Bot\n\nผมพร้อมช่วยเรื่องใบเสนอราคา สอบถามราคา และติดตามสถานะคำสั่งซื้อ / I can help you with quotations, pricing, and tracking orders.\n\nพิมพ์ "ขอราคา NYY 4x6 100 เมตร" หรือใช้คำสั่ง #quote ได้เลยครับ / Type "Quote NYY 4x6 100m" or use the #quote command.',
                 },
+                {
+                    type: 'text',
+                    text: '⚠️ เพื่อให้ระบบรู้จักและสามารถกำหนดสิทธิ์การสั่งซื้อให้คุณได้ กรุณาพิมพ์ทักทาย (เช่น "สวัสดี" หรือ "Hi") เข้ามาในกลุ่มนี้คนละ 1 ข้อความครับ / To help me recognize you and assign proper roles, please have everyone send a quick greeting (like "Hi" or "Hello") in this group!',
+                }
             ]);
+        }
+        this.sweepGroupMembers(groupId).catch(err => {
+            this.logger.error(`Failed to sweep group members for ${groupId}`, err);
+        });
+    }
+    async sweepGroupMembers(groupId) {
+        this.logger.log(`Sweeping existing members for group ${groupId}`);
+        const memberIds = await this.lineApi.getAllGroupMemberIds(groupId);
+        this.logger.log(`Found ${memberIds.length} members in group ${groupId}`);
+        const batch = this.firebase.db.batch();
+        const groupMembershipsRef = this.firebase.db.collection('lineGroups').doc(groupId).collection('memberships');
+        for (const userId of memberIds) {
+            const userRef = this.firebase.db.collection('lineUsers').doc(userId);
+            batch.set(userRef, {
+                lineUserId: userId,
+                updatedAt: new Date(),
+            }, { merge: true });
+            const membershipRef = groupMembershipsRef.doc(userId);
+            batch.set(membershipRef, {
+                lineUserId: userId,
+                lineGroupId: groupId,
+                isActive: true,
+                updatedAt: new Date(),
+            }, { merge: true });
+        }
+        if (memberIds.length > 0) {
+            await batch.commit();
+            this.logger.log(`Successfully swept ${memberIds.length} members for group ${groupId}`);
         }
     }
     async handleBotLeaveGroup(event) {
@@ -184,7 +218,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             if (commands.some((cmd) => text.startsWith(cmd))) {
                 return true;
             }
-            const businessKeywords = ['ราคา', 'เช็คสต๊อก'];
+            const businessKeywords = ['ราคา', 'เช็คสต๊อก', 'quote', 'price'];
             if (businessKeywords.some((kw) => text.includes(kw))) {
                 return true;
             }
@@ -210,8 +244,13 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                 isSlip = verificationResult.isSlip;
                 if (isSlip) {
                     const orderTotal = pendingOrder.total;
-                    const slipAmount = verificationResult.amount || orderTotal;
-                    if (true || Math.abs(slipAmount - orderTotal) < 1) {
+                    const slipAmount = verificationResult.amount || 0;
+                    const receiverName = (verificationResult.receiverName || '').toLowerCase();
+                    const isValidName = receiverName.includes('วรรณรัฐชาติ') ||
+                        receiverName.includes('วิศวกรรม') ||
+                        receiverName.includes('wannaratchat');
+                    const isValidAmount = Math.abs(slipAmount - orderTotal) < 1;
+                    if (isValidAmount && isValidName) {
                         let slipUrl = '';
                         try {
                             const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
@@ -234,7 +273,7 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                     else {
                         await this.lineApi.reply(replyToken, [{
                                 type: 'text',
-                                text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินไม่ตรงกับคำสั่งซื้อ (${pendingOrder.orderNumber}) / Slip detected, but amount does not match the order.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.`
+                                text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินหรือชื่อบัญชีไม่ถูกต้อง (${pendingOrder.orderNumber}) / Slip detected, but amount or account name is incorrect.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nชื่อบัญชีรับโอน (Receiver Name): ${verificationResult.receiverName || 'ไม่ทราบ'}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.`
                             }]);
                     }
                 }
@@ -290,7 +329,8 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                 return;
             }
             const extraction = await this.aiService.extractQuotationRequest(text);
-            if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || text.includes('ราคา')) {
+            const isQuotationKeyword = text.includes('ราคา') || text.toLowerCase().includes('quote') || text.toLowerCase().includes('price');
+            if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || isQuotationKeyword) {
                 await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction, true);
             }
             else {
@@ -373,13 +413,18 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             const lastUpdate = data?.groupSummaryUpdatedAt?.toMillis() || 0;
             if (now - lastUpdate > 3600000) {
                 const summary = await this.lineApi.getGroupSummary(groupId);
+                const memberCount = await this.lineApi.getGroupMemberCount(groupId);
+                let updates = {
+                    groupSummaryUpdatedAt: new Date(),
+                };
                 if (summary && summary.groupName) {
-                    await groupRef.update({
-                        groupName: summary.groupName,
-                        pictureUrl: summary.pictureUrl || null,
-                        groupSummaryUpdatedAt: new Date(),
-                    });
+                    updates.groupName = summary.groupName;
+                    updates.pictureUrl = summary.pictureUrl || null;
                 }
+                if (memberCount !== null) {
+                    updates.memberCount = memberCount;
+                }
+                await groupRef.set(updates, { merge: true });
             }
         }
         catch (e) {

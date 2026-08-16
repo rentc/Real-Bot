@@ -33,6 +33,7 @@ Return a JSON object containing:
 
 Examples:
 - "ขอราคา NYY 4x6 100 เมตร" -> {"intent":"PRICE", "items":[{"type":"NYY","size":"4x6","quantity":100}]}
+- "Quote NYY 4x6 100m" -> {"intent":"QUOTE", "items":[{"type":"NYY","size":"4x6","quantity":100}]}
 - "เสนอราคา 1. VCT 4 x 4 1000 เมตร 2. THW 2.5 500 เมตร" -> {"intent":"QUOTE", "items":[{"type":"VCT","size":"4x4","quantity":1000}, {"type":"THW","size":"2.5","quantity":500}]}
 `;
         let rawText = '{}';
@@ -144,6 +145,7 @@ If the image doesn't contain a request for cables or pricing, return "intent": "
                         properties: {
                             isSlip: { type: genai_1.Type.BOOLEAN, description: "True if the image is a valid bank transfer slip" },
                             amount: { type: genai_1.Type.NUMBER, description: "The exact amount of money transferred, e.g. 1500.50" },
+                            receiverName: { type: genai_1.Type.STRING, description: "The name of the person or company receiving the money" },
                             bankRef: { type: genai_1.Type.STRING, description: "The reference number, transaction ID, or ref code" },
                             transferDate: { type: genai_1.Type.STRING, description: "The date and time of transfer, if available" }
                         }

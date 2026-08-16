@@ -155,4 +155,59 @@ export class LineApiService {
       return null;
     }
   }
+
+  /**
+   * Get group member count.
+   */
+  async getGroupMemberCount(groupId: string): Promise<number | null> {
+    try {
+      const response = await axios.get<{ count: number }>(
+        `${LINE_API_BASE}/group/${groupId}/members/count`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.channelAccessToken}`,
+          },
+        },
+      );
+      return response.data.count;
+    } catch (error) {
+      this.logger.error(`Failed to fetch group member count: ${groupId}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all group member IDs.
+   */
+  async getAllGroupMemberIds(groupId: string): Promise<string[]> {
+    let memberIds: string[] = [];
+    let start: string | undefined = undefined;
+
+    try {
+      do {
+        const url: string = start 
+          ? `${LINE_API_BASE}/group/${groupId}/members/ids?start=${start}`
+          : `${LINE_API_BASE}/group/${groupId}/members/ids`;
+          
+        const response = await axios.get<{ memberIds: string[], next?: string }>(
+          url,
+          {
+            headers: {
+              Authorization: `Bearer ${this.channelAccessToken}`,
+            },
+          },
+        );
+
+        if (response.data.memberIds) {
+          memberIds = memberIds.concat(response.data.memberIds);
+        }
+        start = response.data.next;
+      } while (start);
+
+      return memberIds;
+    } catch (error) {
+      this.logger.error(`Failed to fetch group member IDs: ${groupId}`, error);
+      return memberIds;
+    }
+  }
 }

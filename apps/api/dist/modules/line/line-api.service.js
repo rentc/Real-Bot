@@ -106,6 +106,45 @@ let LineApiService = LineApiService_1 = class LineApiService {
             return null;
         }
     }
+    async getGroupMemberCount(groupId) {
+        try {
+            const response = await axios_1.default.get(`${LINE_API_BASE}/group/${groupId}/members/count`, {
+                headers: {
+                    Authorization: `Bearer ${this.channelAccessToken}`,
+                },
+            });
+            return response.data.count;
+        }
+        catch (error) {
+            this.logger.error(`Failed to fetch group member count: ${groupId}`, error);
+            return null;
+        }
+    }
+    async getAllGroupMemberIds(groupId) {
+        let memberIds = [];
+        let start = undefined;
+        try {
+            do {
+                const url = start
+                    ? `${LINE_API_BASE}/group/${groupId}/members/ids?start=${start}`
+                    : `${LINE_API_BASE}/group/${groupId}/members/ids`;
+                const response = await axios_1.default.get(url, {
+                    headers: {
+                        Authorization: `Bearer ${this.channelAccessToken}`,
+                    },
+                });
+                if (response.data.memberIds) {
+                    memberIds = memberIds.concat(response.data.memberIds);
+                }
+                start = response.data.next;
+            } while (start);
+            return memberIds;
+        }
+        catch (error) {
+            this.logger.error(`Failed to fetch group member IDs: ${groupId}`, error);
+            return memberIds;
+        }
+    }
 };
 exports.LineApiService = LineApiService;
 exports.LineApiService = LineApiService = LineApiService_1 = __decorate([

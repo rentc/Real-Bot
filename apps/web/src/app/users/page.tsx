@@ -100,21 +100,22 @@ export default function UsersPage() {
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px', maxHeight: '400px', overflowY: 'auto', padding: '4px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto', padding: '4px' }}>
           <button
             className={`glass-panel hover-glow ${selectedGroup === 'ALL' ? 'active-group' : ''}`}
             onClick={() => setSelectedGroup('ALL')}
             style={{
-              padding: '20px',
+              padding: '16px 20px',
               border: selectedGroup === 'ALL' ? '2px solid var(--accent-blue)' : '1px solid var(--glass-border)',
               background: selectedGroup === 'ALL' ? 'var(--bg-secondary)' : 'var(--glass-bg)',
               color: 'var(--text-primary)',
               textAlign: 'left',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              boxShadow: selectedGroup === 'ALL' ? '0 8px 30px var(--accent-blue-glow)' : 'var(--glass-shadow)',
-              transform: selectedGroup === 'ALL' ? 'translateY(-4px)' : 'none'
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: selectedGroup === 'ALL' ? '0 4px 15px var(--accent-blue-glow)' : 'var(--glass-shadow)',
+              transform: selectedGroup === 'ALL' ? 'translateY(-2px)' : 'none'
             }}
           >
             <span style={{ fontWeight: 700, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -129,16 +130,17 @@ export default function UsersPage() {
               className={`glass-panel hover-glow ${selectedGroup === g.id ? 'active-group' : ''}`}
               onClick={() => setSelectedGroup(g.id)}
               style={{
-                padding: '20px',
+                padding: '16px 20px',
                 border: selectedGroup === g.id ? '2px solid var(--accent-blue)' : '1px solid var(--glass-border)',
                 background: selectedGroup === g.id ? 'var(--bg-secondary)' : 'var(--glass-bg)',
                 color: 'var(--text-primary)',
                 textAlign: 'left',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                boxShadow: selectedGroup === g.id ? '0 8px 30px var(--accent-blue-glow)' : 'var(--glass-shadow)',
-                transform: selectedGroup === g.id ? 'translateY(-4px)' : 'none'
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: selectedGroup === g.id ? '0 4px 15px var(--accent-blue-glow)' : 'var(--glass-shadow)',
+                transform: selectedGroup === g.id ? 'translateY(-2px)' : 'none'
               }}
             >
               <span style={{ fontWeight: 700, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px', wordBreak: 'break-all' }}>
