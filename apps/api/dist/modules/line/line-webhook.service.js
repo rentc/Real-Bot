@@ -180,6 +180,27 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             }, { merge: true });
         }
     }
+    async isAdminUser(groupId, userId) {
+        try {
+            const membershipRef = this.firebase.db
+                .collection('lineGroups').doc(groupId)
+                .collection('memberships').doc(userId);
+            const rolesSnapshot = await membershipRef.collection('roles')
+                .where('isActive', '==', true).get();
+            if (!rolesSnapshot.empty) {
+                const roleId = rolesSnapshot.docs[0].data().roleId;
+                return roleId === 'admin' || roleId === 'ADMIN';
+            }
+        }
+        catch (e) {
+            this.logger.error('Failed to check admin role', e);
+        }
+        return false;
+    }
+    hasQuotationKeyword(text) {
+        const t = text.toLowerCase();
+        return t.includes('ขอราคา') || t.includes('quote') || t.includes('price') || t.includes('ราคา');
+    }
     async handleMessage(event) {
         if (event.source.type !== 'group')
             return;
@@ -192,17 +213,27 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         const message = event.message;
         if (!message)
             return;
-        const isRelevant = this.isRelevantMessage(message);
-        if (!isRelevant) {
-            return;
-        }
+        const isAdmin = await this.isAdminUser(groupId, userId);
         if (message.type === 'text' && message.text) {
+            if (isAdmin && !this.hasQuotationKeyword(message.text)) {
+                return;
+            }
+            const isRelevant = this.isRelevantMessage(message);
+            if (!isRelevant)
+                return;
             await this.handleTextMessage(event, message.text, groupId, userId);
         }
         else if (message.type === 'image') {
+            if (isAdmin)
+                return;
             await this.handleImageMessage(event, message.id, groupId, userId);
         }
         else if (message.type === 'file') {
+            if (isAdmin)
+                return;
+            const isRelevant = this.isRelevantMessage(message);
+            if (!isRelevant)
+                return;
             await this.handleFileMessage(event, message, groupId, userId);
         }
     }

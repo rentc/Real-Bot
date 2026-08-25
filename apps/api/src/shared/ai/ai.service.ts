@@ -13,59 +13,32 @@ export class AiService {
   }
 
   async extractQuotationRequest(text: string) {
-    this.logger.log(`Extracting from text: ${text}`);
+    this.logger.log(`Extracting from text using Regex: ${text}`);
 
-    const prompt = `You are an AI assistant for a Thai electrical cable supplier.
-Your task is to extract cable requests from the user message.
-User message: "${text}"
-
-Return a JSON object containing:
-- "intent": "QUOTE", "PRICE", "STOCK", or "OTHER"
-- "items": array of objects with "type" (e.g. "NYY", "VCT"), "size" (e.g. "4x6", "4x4"), and "quantity" (number).
-
-Examples:
-- "ขอราคา NYY 4x6 100 เมตร" -> {"intent":"PRICE", "items":[{"type":"NYY","size":"4x6","quantity":100}]}
-- "Quote NYY 4x6 100m" -> {"intent":"QUOTE", "items":[{"type":"NYY","size":"4x6","quantity":100}]}
-- "เสนอราคา 1. VCT 4 x 4 1000 เมตร 2. THW 2.5 500 เมตร" -> {"intent":"QUOTE", "items":[{"type":"VCT","size":"4x4","quantity":1000}, {"type":"THW","size":"2.5","quantity":500}]}
-`;
-
-    let rawText = '{}';
-    try {
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              intent: { type: Type.STRING, enum: ['QUOTE', 'PRICE', 'STOCK', 'OTHER'] },
-              items: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    type: { type: Type.STRING, description: "Cable type e.g. NYY, THW, VCT" },
-                    size: { type: Type.STRING, description: "Size e.g. 4x6, 2x2.5" },
-                    quantity: { type: Type.NUMBER, description: "Amount requested" }
-                  }
-                }
-              }
-            }
-          }
-        }
+    const items = [];
+    // Regex matches: (Type) (Size) (Quantity) (Optional Unit)
+    // Types: FD-CV, CV, NYY, VCT, THW, VAF, VSF, VKF
+    // Size: Number or Number x Number (e.g. 1X 300, 4x6, 16)
+    // Quantity: Number followed by optional unit (เมตร, m, ม้วน)
+    const regex = /(FD-CV|CV|NYY|VCT|THW|VAF|VSF|VKF)\s+([\d\.]+(?:\s*[xX]\s*[\d\.]+)?)\s+(\d+)(?:\s*(?:เมตร|m|ม\.|ม้วน|ม))?/gi;
+    
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      items.push({
+        type: match[1].toUpperCase(),
+        size: match[2].replace(/\s+/g, '').toUpperCase(),
+        quantity: parseInt(match[3], 10)
       });
-
-      rawText = response.text || '{}';
-      // Remove markdown code blocks if any
-      rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-
-      const result = JSON.parse(rawText);
-      return result;
-    } catch (e: any) {
-      this.logger.error('Failed to generate or parse AI response', e);
-      return { intent: 'OTHER', items: [], debug_error: e.message || String(e), debug_raw: rawText };
     }
+
+    let intent = 'OTHER';
+    const lowerText = text.toLowerCase();
+    
+    if (items.length > 0 || lowerText.includes('ราคา') || lowerText.includes('quote') || lowerText.includes('price')) {
+      intent = 'QUOTE';
+    }
+
+    return { intent, items };
   }
 
   async extractQuotationFromMedia(mediaBuffer: Buffer, mimeType: string) {
@@ -81,7 +54,7 @@ If the image doesn't contain a request for cables or pricing, return "intent": "
     let rawText = '{}';
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: [
           prompt,
           {
@@ -130,7 +103,7 @@ If the image doesn't contain a request for cables or pricing, return "intent": "
     
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: [
           "Extract information from this bank transfer slip. If it is clearly not a bank transfer slip, set isSlip to false.",
           {

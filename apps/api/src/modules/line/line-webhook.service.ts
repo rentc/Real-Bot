@@ -218,6 +218,28 @@ export class LineWebhookService {
     }
   }
 
+  private async isAdminUser(groupId: string, userId: string): Promise<boolean> {
+    try {
+      const membershipRef = this.firebase.db
+        .collection('lineGroups').doc(groupId)
+        .collection('memberships').doc(userId);
+      const rolesSnapshot = await membershipRef.collection('roles')
+        .where('isActive', '==', true).get();
+      if (!rolesSnapshot.empty) {
+        const roleId = rolesSnapshot.docs[0].data().roleId as string;
+        return roleId === 'admin' || roleId === 'ADMIN';
+      }
+    } catch (e) {
+      this.logger.error('Failed to check admin role', e);
+    }
+    return false;
+  }
+
+  private hasQuotationKeyword(text: string): boolean {
+    const t = text.toLowerCase();
+    return t.includes('ขอราคา') || t.includes('quote') || t.includes('price') || t.includes('ราคา');
+  }
+
   private async handleMessage(event: LineEvent): Promise<void> {
     if (event.source.type !== 'group') return;
 
@@ -231,17 +253,26 @@ export class LineWebhookService {
     const message = event.message;
     if (!message) return;
 
-    const isRelevant = this.isRelevantMessage(message);
-
-    if (!isRelevant) {
-      return;
-    }
+    // Check if sender is admin
+    const isAdmin = await this.isAdminUser(groupId, userId);
 
     if (message.type === 'text' && message.text) {
+      // Admin: only process if message explicitly contains quotation keywords
+      if (isAdmin && !this.hasQuotationKeyword(message.text)) {
+        return;
+      }
+      const isRelevant = this.isRelevantMessage(message);
+      if (!isRelevant) return;
       await this.handleTextMessage(event, message.text, groupId, userId);
     } else if (message.type === 'image') {
+      // Admin sending image → skip entirely (no slip or quote processing)
+      if (isAdmin) return;
       await this.handleImageMessage(event, message.id, groupId, userId);
     } else if (message.type === 'file') {
+      // Admin sending file → skip entirely
+      if (isAdmin) return;
+      const isRelevant = this.isRelevantMessage(message);
+      if (!isRelevant) return;
       await this.handleFileMessage(event, message, groupId, userId);
     }
   }
