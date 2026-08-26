@@ -1,0 +1,19 @@
+2026-08-26T06:40:38.395212Z I ssrrealbot6a793: Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+2026-08-26T06:40:39.241696Z I ssrrealbot6a793: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2026-08-26T06:40:39.788820Z ? ssrrealbot6a793: ⚠ Invalid next.config.js options detected: 
+
+2026-08-26T06:40:39.789962Z ? ssrrealbot6a793: ⚠     Unrecognized key(s) in object: '__esModule', 'default'
+
+2026-08-26T06:40:39.790199Z ? ssrrealbot6a793: ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+
+2026-08-26T06:40:39.798336Z ? ssrrealbot6a793: ✓ Running next.config.js took 53ms
+
+2026-08-26T06:40:40.814583Z I api: 
+2026-08-26T06:40:40.818732Z I api: 
+2026-08-26T06:40:42.615732Z I ssrrealbot6a793: 
+2026-08-26T06:40:42.617968Z I ssrrealbot6a793: 
+2026-08-26T06:40:42.626375Z I ssrrealbot6a793: 
+2026-08-26T06:40:42.676397Z I ssrrealbot6a793: 
+2026-08-26T06:40:42.897395Z I ssrrealbot6a793: 
+2026-08-26T06:40:42.940379Z I ssrrealbot6a793: 
+2026-08-26T06:40:42.940430Z I ssrrealbot6a793: 

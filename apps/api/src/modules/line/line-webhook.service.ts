@@ -241,11 +241,15 @@ export class LineWebhookService {
   }
 
   private async handleMessage(event: LineEvent): Promise<void> {
-    if (event.source.type !== 'group') return;
-
-    const groupId = event.source.groupId;
+    this.logger.log(`[Webhook] Handling message from source type: ${event.source.type}`);
+    // Support both group and 1-on-1 chats. For 1-on-1, use userId as groupId.
+    const groupId = event.source.groupId || event.source.userId;
     const userId = event.source.userId;
-    if (!groupId || !userId) return;
+    
+    if (!groupId || !userId) {
+      this.logger.warn(`[Webhook] Ignored event due to missing groupId or userId. Source: ${JSON.stringify(event.source)}`);
+      return;
+    }
 
     await this.upsertSender(groupId, userId);
     await this.upsertGroup(groupId);
@@ -257,17 +261,17 @@ export class LineWebhookService {
     const isAdmin = await this.isAdminUser(groupId, userId);
 
     if (message.type === 'text' && message.text) {
-      // Admin: only process if message explicitly contains quotation keywords
-      if (isAdmin && !this.hasQuotationKeyword(message.text)) {
+      // Admin: only process if message explicitly contains quotation keywords or starts with # (commands)
+      if (isAdmin && !this.hasQuotationKeyword(message.text) && !message.text.startsWith('#')) {
+        this.logger.log(`[Webhook] Blocked admin message: ${message.text}`);
         return;
       }
       const isRelevant = this.isRelevantMessage(message);
+      this.logger.log(`[Webhook] Text message: "${message.text}", isAdmin: ${isAdmin}, isRelevant: ${isRelevant}`);
       if (!isRelevant) return;
       await this.handleTextMessage(event, message.text, groupId, userId);
     } else if (message.type === 'image') {
-      // Admin sending image → skip entirely (no slip or quote processing)
-      if (isAdmin) return;
-      await this.handleImageMessage(event, message.id, groupId, userId);
+      await this.handleImageMessage(event, message.id, groupId, userId, isAdmin);
     } else if (message.type === 'file') {
       // Admin sending file → skip entirely
       if (isAdmin) return;
@@ -308,19 +312,23 @@ export class LineWebhookService {
     return false;
   }
 
-  private async handleImageMessage(event: LineEvent, messageId: string, groupId: string, userId: string): Promise<void> {
+  private async handleImageMessage(event: LineEvent, messageId: string, groupId: string, userId: string, isAdmin: boolean = false): Promise<void> {
+    this.logger.log(`[Webhook] Processing image message ${messageId} from ${userId} (isAdmin: ${isAdmin}) in group ${groupId}`);
     const replyToken = event.replyToken;
     if (!replyToken) return;
     
     // Check if there is a pending order for this group before invoking AI
     const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
+    this.logger.log(`[Webhook] Pending order for group ${groupId}: ${pendingOrder ? pendingOrder.orderNumber : 'None'}`);
 
     try {
       const imageBuffer = await this.lineApi.getContent(messageId);
       let isSlip = false;
 
       if (pendingOrder) {
+        this.logger.log(`[Webhook] Sending image to AI to verify payment slip...`);
         const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
+        this.logger.log(`[Webhook] AI Verification Result: ${JSON.stringify(verificationResult)}`);
         isSlip = verificationResult.isSlip;
         
         if (isSlip) {
@@ -329,14 +337,9 @@ export class LineWebhookService {
           const slipAmount = verificationResult.amount || 0;
           const receiverName = (verificationResult.receiverName || '').toLowerCase();
           
-          // Check if receiver name contains expected keywords
-          const isValidName = receiverName.includes('วรรณรัฐชาติ') || 
-                              receiverName.includes('วิศวกรรม') || 
-                              receiverName.includes('wannaratchat');
-                              
           const isValidAmount = Math.abs(slipAmount - orderTotal) < 1;
 
-          if (isValidAmount && isValidName) {
+          if (isValidAmount) {
             // Upload slip to Firebase Storage
             let slipUrl = '';
             try {
@@ -362,10 +365,25 @@ export class LineWebhookService {
               text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินหรือชื่อบัญชีไม่ถูกต้อง (${pendingOrder.orderNumber}) / Slip detected, but amount or account name is incorrect.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nชื่อบัญชีรับโอน (Receiver Name): ${verificationResult.receiverName || 'ไม่ทราบ'}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.` 
             }]);
           }
+        } else {
+          // It's not recognized as a slip, but we have a pending order
+          await this.lineApi.reply(replyToken as string, [{ 
+            type: 'text', 
+            text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / The system could not read the payment slip. Please send a clearer image.\n(หากมั่นใจว่าส่งสลิปถูกต้องแล้ว แอดมินจะตรวจสอบให้ภายหลังครับ / If you are sure this is correct, an admin will review it later.)` 
+          }]);
         }
       }
       
-      if (!isSlip) {
+      if (!isSlip && !pendingOrder) {
+        if (isAdmin) {
+          // If an admin sends an image and there's no pending order, let them know.
+          await this.lineApi.reply(replyToken as string, [{ 
+            type: 'text', 
+            text: `⚠️ ไม่พบคำสั่งซื้อที่รอการชำระเงินในขณะนี้ หากนี่คือสลิปโอนเงิน กรุณาสร้างคำสั่งซื้อก่อนครับ / No pending order found. If this is a payment slip, please create an order first.` 
+          }]);
+          return;
+        }
+
         // Process as quotation request
         const extraction = await this.aiService.extractQuotationFromMedia(imageBuffer, 'image/jpeg');
         if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE') {
@@ -400,22 +418,25 @@ export class LineWebhookService {
       // 1. Mark session as active
       await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
       
+      const lowerText = text.trim().toLowerCase();
       // Handle #order command
-      if (text.startsWith('#order')) {
+      if (lowerText.startsWith('#order')) {
         const parts = text.split(' ');
         if (parts.length < 2) {
            await this.lineApi.reply(replyToken as string, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ / Please specify the quotation number to order (e.g. #order QT-123)' }]);
            return;
         }
-        const quotationId = parts[1];
+        const quotationId = parts[1].trim(); // trim to avoid issues with extra spaces
+        this.logger.log(`[Webhook] Processing #order for quotation: ${quotationId}`);
         try {
           const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
+          this.logger.log(`[Webhook] Order created successfully: ${order.orderNumber}`);
           await this.lineApi.reply(replyToken as string, [{ 
             type: 'text', 
-            text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ / Order confirmed successfully.\nหมายเลขคำสั่งซื้อ (Order Number): ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ / Admin will contact you shortly.\n\nสามารถชำระเงินได้ที่ (Payment Details):\nธนาคารกสิกรไทย (Kasikornbank)\nชื่อบัญชี (Account Name): บจก.วรรณรัฐชาติ วิศวกรรม\nเลขที่บัญชี (Account No): 117-8-14118-6` 
+            text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ / Order confirmed successfully.\nหมายเลขคำสั่งซื้อ (Order Number): ${order.orderNumber}\n\nสามารถชำระเงินได้ที่ (Payment Details):\nธนาคารกสิกรไทย (Kasikornbank)\nชื่อบัญชี (Account Name): บจก.วรรณรัฐชาติ วิศวกรรม\nเลขที่บัญชี (Account No): 117-8-14118-6\n\nเมื่อชำระเงินแล้ว กรุณาส่งรูปสลิปโอนเงินมาในแชทนี้เพื่อยืนยันการชำระเงินครับ / After payment, please send the transfer slip image here for confirmation.` 
           }]);
-        } catch (e) {
-          this.logger.error('Error creating order', e);
+        } catch (e: any) {
+          this.logger.error(`Error creating order for ${quotationId}: ${e.message}`, e.stack);
           await this.lineApi.reply(replyToken as string, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ / Error creating order. Please ensure the quotation is approved.' }]);
         }
         return;
@@ -424,7 +445,7 @@ export class LineWebhookService {
       // 2. Use AI to extract intent and items
       const extraction = await this.aiService.extractQuotationRequest(text);
       
-      const isQuotationKeyword = text.includes('ราคา') || text.toLowerCase().includes('quote') || text.toLowerCase().includes('price');
+      const isQuotationKeyword = lowerText.includes('ราคา') || lowerText.includes('quote') || lowerText.includes('price');
       if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || isQuotationKeyword) {
         await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken as string, extraction, true);
       } else {

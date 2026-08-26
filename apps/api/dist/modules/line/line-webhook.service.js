@@ -202,12 +202,13 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         return t.includes('ขอราคา') || t.includes('quote') || t.includes('price') || t.includes('ราคา');
     }
     async handleMessage(event) {
-        if (event.source.type !== 'group')
-            return;
-        const groupId = event.source.groupId;
+        this.logger.log(`[Webhook] Handling message from source type: ${event.source.type}`);
+        const groupId = event.source.groupId || event.source.userId;
         const userId = event.source.userId;
-        if (!groupId || !userId)
+        if (!groupId || !userId) {
+            this.logger.warn(`[Webhook] Ignored event due to missing groupId or userId. Source: ${JSON.stringify(event.source)}`);
             return;
+        }
         await this.upsertSender(groupId, userId);
         await this.upsertGroup(groupId);
         const message = event.message;
@@ -215,18 +216,18 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             return;
         const isAdmin = await this.isAdminUser(groupId, userId);
         if (message.type === 'text' && message.text) {
-            if (isAdmin && !this.hasQuotationKeyword(message.text)) {
+            if (isAdmin && !this.hasQuotationKeyword(message.text) && !message.text.startsWith('#')) {
+                this.logger.log(`[Webhook] Blocked admin message: ${message.text}`);
                 return;
             }
             const isRelevant = this.isRelevantMessage(message);
+            this.logger.log(`[Webhook] Text message: "${message.text}", isAdmin: ${isAdmin}, isRelevant: ${isRelevant}`);
             if (!isRelevant)
                 return;
             await this.handleTextMessage(event, message.text, groupId, userId);
         }
         else if (message.type === 'image') {
-            if (isAdmin)
-                return;
-            await this.handleImageMessage(event, message.id, groupId, userId);
+            await this.handleImageMessage(event, message.id, groupId, userId, isAdmin);
         }
         else if (message.type === 'file') {
             if (isAdmin)
@@ -262,26 +263,27 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         }
         return false;
     }
-    async handleImageMessage(event, messageId, groupId, userId) {
+    async handleImageMessage(event, messageId, groupId, userId, isAdmin = false) {
+        this.logger.log(`[Webhook] Processing image message ${messageId} from ${userId} (isAdmin: ${isAdmin}) in group ${groupId}`);
         const replyToken = event.replyToken;
         if (!replyToken)
             return;
         const pendingOrder = await this.ordersService.findPendingOrderForGroup(groupId);
+        this.logger.log(`[Webhook] Pending order for group ${groupId}: ${pendingOrder ? pendingOrder.orderNumber : 'None'}`);
         try {
             const imageBuffer = await this.lineApi.getContent(messageId);
             let isSlip = false;
             if (pendingOrder) {
+                this.logger.log(`[Webhook] Sending image to AI to verify payment slip...`);
                 const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
+                this.logger.log(`[Webhook] AI Verification Result: ${JSON.stringify(verificationResult)}`);
                 isSlip = verificationResult.isSlip;
                 if (isSlip) {
                     const orderTotal = pendingOrder.total;
                     const slipAmount = verificationResult.amount || 0;
                     const receiverName = (verificationResult.receiverName || '').toLowerCase();
-                    const isValidName = receiverName.includes('วรรณรัฐชาติ') ||
-                        receiverName.includes('วิศวกรรม') ||
-                        receiverName.includes('wannaratchat');
                     const isValidAmount = Math.abs(slipAmount - orderTotal) < 1;
-                    if (isValidAmount && isValidName) {
+                    if (isValidAmount) {
                         let slipUrl = '';
                         try {
                             const fileName = `slips/${pendingOrder.id}-${Date.now()}.jpg`;
@@ -308,8 +310,21 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                             }]);
                     }
                 }
+                else {
+                    await this.lineApi.reply(replyToken, [{
+                            type: 'text',
+                            text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / The system could not read the payment slip. Please send a clearer image.\n(หากมั่นใจว่าส่งสลิปถูกต้องแล้ว แอดมินจะตรวจสอบให้ภายหลังครับ / If you are sure this is correct, an admin will review it later.)`
+                        }]);
+                }
             }
-            if (!isSlip) {
+            if (!isSlip && !pendingOrder) {
+                if (isAdmin) {
+                    await this.lineApi.reply(replyToken, [{
+                            type: 'text',
+                            text: `⚠️ ไม่พบคำสั่งซื้อที่รอการชำระเงินในขณะนี้ หากนี่คือสลิปโอนเงิน กรุณาสร้างคำสั่งซื้อก่อนครับ / No pending order found. If this is a payment slip, please create an order first.`
+                        }]);
+                    return;
+                }
                 const extraction = await this.aiService.extractQuotationFromMedia(imageBuffer, 'image/jpeg');
                 if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE') {
                     await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction);
@@ -339,28 +354,31 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
         const replyToken = event.replyToken;
         if (replyToken) {
             await this.sessionsService.upsertSession(groupId, userId, { lastMessage: text });
-            if (text.startsWith('#order')) {
+            const lowerText = text.trim().toLowerCase();
+            if (lowerText.startsWith('#order')) {
                 const parts = text.split(' ');
                 if (parts.length < 2) {
                     await this.lineApi.reply(replyToken, [{ type: 'text', text: 'กรุณาระบุหมายเลขใบเสนอราคาที่ต้องการสั่งซื้อ / Please specify the quotation number to order (e.g. #order QT-123)' }]);
                     return;
                 }
-                const quotationId = parts[1];
+                const quotationId = parts[1].trim();
+                this.logger.log(`[Webhook] Processing #order for quotation: ${quotationId}`);
                 try {
                     const order = await this.ordersService.createOrderFromQuotation(quotationId, userId);
+                    this.logger.log(`[Webhook] Order created successfully: ${order.orderNumber}`);
                     await this.lineApi.reply(replyToken, [{
                             type: 'text',
-                            text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ / Order confirmed successfully.\nหมายเลขคำสั่งซื้อ (Order Number): ${order.orderNumber}\nแอดมินจะติดต่อกลับโดยเร็วที่สุดครับ / Admin will contact you shortly.\n\nสามารถชำระเงินได้ที่ (Payment Details):\nธนาคารกสิกรไทย (Kasikornbank)\nชื่อบัญชี (Account Name): บจก.วรรณรัฐชาติ วิศวกรรม\nเลขที่บัญชี (Account No): 117-8-14118-6`
+                            text: `✅ ยืนยันการสั่งซื้อเรียบร้อยแล้วครับ / Order confirmed successfully.\nหมายเลขคำสั่งซื้อ (Order Number): ${order.orderNumber}\n\nสามารถชำระเงินได้ที่ (Payment Details):\nธนาคารกสิกรไทย (Kasikornbank)\nชื่อบัญชี (Account Name): บจก.วรรณรัฐชาติ วิศวกรรม\nเลขที่บัญชี (Account No): 117-8-14118-6\n\nเมื่อชำระเงินแล้ว กรุณาส่งรูปสลิปโอนเงินมาในแชทนี้เพื่อยืนยันการชำระเงินครับ / After payment, please send the transfer slip image here for confirmation.`
                         }]);
                 }
                 catch (e) {
-                    this.logger.error('Error creating order', e);
+                    this.logger.error(`Error creating order for ${quotationId}: ${e.message}`, e.stack);
                     await this.lineApi.reply(replyToken, [{ type: 'text', text: 'เกิดข้อผิดพลาดในการสร้างคำสั่งซื้อ กรุณาตรวจสอบว่าใบเสนอราคานี้ได้รับการอนุมัติแล้วหรือยังครับ / Error creating order. Please ensure the quotation is approved.' }]);
                 }
                 return;
             }
             const extraction = await this.aiService.extractQuotationRequest(text);
-            const isQuotationKeyword = text.includes('ราคา') || text.toLowerCase().includes('quote') || text.toLowerCase().includes('price');
+            const isQuotationKeyword = lowerText.includes('ราคา') || lowerText.includes('quote') || lowerText.includes('price');
             if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || isQuotationKeyword) {
                 await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction, true);
             }

@@ -90,8 +90,8 @@ let ApprovalsService = class ApprovalsService {
                     itemsText += `  *หมายเหตุ: ${item.note}*\n`;
                 }
             }
-            const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api-e5mpppexfq-an.a.run.app/api';
-            const pdfUrl = `${apiBaseUrl}/quotations/${quotationData.id}/pdf`;
+            const webUrl = process.env.WEB_URL || 'https://real-bot-6a793.web.app';
+            const pdfUrl = `${webUrl}/quotations/${quotationData.id}/pdf`;
             let pushText = `✅ ใบเสนอราคาได้รับการอนุมัติแล้วครับ\n\n`;
             pushText += `📄 เลขที่: ${quotationData.id}\n`;
             pushText += `📅 วันที่: ${dateStr}\n\n`;

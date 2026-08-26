@@ -1,0 +1,24 @@
+2026-08-26T05:22:34.689988Z ? api: URL: http://localhost:8080/
+2026-08-26T05:22:34.690597Z ? api: Serving function...
+2026-08-26T05:22:34.690799Z ? api: Function: api
+2026-08-26T05:22:34.690891Z ? api: Signature type: http
+2026-08-26T05:22:34.690940Z ? api: URL: http://localhost:8080/
+2026-08-26T05:22:34.691826Z I api: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2026-08-26T05:22:34.707011Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [NestFactory] Starting Nest application...
+
+2026-08-26T05:22:34.722862Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [NestFactory] Starting Nest application...
+
+2026-08-26T05:22:34.735343Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] AppModule dependencies initialized +28ms
+
+2026-08-26T05:22:34.735646Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] FirebaseModule dependencies initialized +0ms
+
+2026-08-26T05:22:34.735773Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] PassportModule dependencies initialized +1ms
+
+2026-08-26T05:22:34.735968Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] ErpAdapterModule dependencies initialized +0ms
+
+2026-08-26T05:22:34.736675Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] ThrottlerModule dependencies initialized +1ms
+
+2026-08-26T05:22:34.738044Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] SessionsModule dependencies initialized +1ms
+
+2026-08-26T05:22:34.738233Z ? api: [Nest] 1  - 08/26/2026, 5:22:34 AM     LOG [InstanceLoader] PdfModule dependencies initialized +0ms
+

@@ -1,0 +1,30 @@
+2026-08-26T06:49:21.572516Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] BuyersModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.572706Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] MatchingModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.572863Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.572958Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.575516Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] PricesModule dependencies initialized +3ms
+
+2026-08-26T06:49:21.576915Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] OrdersModule dependencies initialized +1ms
+
+2026-08-26T06:49:21.576989Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] PaymentsModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.577596Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] AiModule dependencies initialized +1ms
+
+2026-08-26T06:49:21.578739Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] UsersModule dependencies initialized +1ms
+
+2026-08-26T06:49:21.578837Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] JwtModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.579642Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] QuotationsModule dependencies initialized +1ms
+
+2026-08-26T06:49:21.581769Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] ApprovalsModule dependencies initialized +2ms
+
+2026-08-26T06:49:21.581849Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] LineModule dependencies initialized +0ms
+
+2026-08-26T06:49:21.582345Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [InstanceLoader] AuthModule dependencies initialized +1ms
+
+2026-08-26T06:49:21.719664Z ? api: [Nest] 1  - 08/26/2026, 6:49:21 AM     LOG [RoutesResolver] HealthController {/api/health}: +137ms
+
