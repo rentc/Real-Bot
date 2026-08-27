@@ -98,7 +98,7 @@ If the image doesn't contain a request for cables or pricing, return "intent": "
             const response = await this.ai.models.generateContent({
                 model: 'gemini-3.6-flash',
                 contents: [
-                    "Extract information from this bank transfer slip. If it is clearly not a bank transfer slip, set isSlip to false.",
+                    "Analyze this image. If it resembles a bank transfer slip, receipt, or any payment proof, set isSlip to true and extract the details. Be lenient: even if it's slightly blurry or from an unrecognized bank, treat it as a slip if it contains transfer details.",
                     {
                         inlineData: {
                             data: imageBuffer.toString('base64'),
@@ -111,11 +111,12 @@ If the image doesn't contain a request for cables or pricing, return "intent": "
                     responseSchema: {
                         type: genai_1.Type.OBJECT,
                         properties: {
-                            isSlip: { type: genai_1.Type.BOOLEAN, description: "True if the image is a valid bank transfer slip" },
-                            amount: { type: genai_1.Type.NUMBER, description: "The exact amount of money transferred, e.g. 1500.50" },
+                            isSlip: { type: genai_1.Type.BOOLEAN, description: "True if the image is a bank transfer slip or payment proof" },
+                            amount: { type: genai_1.Type.NUMBER, description: "The exact amount of money transferred, e.g. 1500.50 (leave empty if unreadable)" },
                             receiverName: { type: genai_1.Type.STRING, description: "The name of the person or company receiving the money" },
                             bankRef: { type: genai_1.Type.STRING, description: "The reference number, transaction ID, or ref code" },
-                            transferDate: { type: genai_1.Type.STRING, description: "The date and time of transfer, if available" }
+                            transferDate: { type: genai_1.Type.STRING, description: "The date and time of transfer, if available" },
+                            rawTextDetected: { type: genai_1.Type.STRING, description: "Any raw text you can read from the slip for debugging" }
                         }
                     }
                 }

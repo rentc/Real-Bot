@@ -369,7 +369,7 @@ export class LineWebhookService {
           // It's not recognized as a slip, but we have a pending order
           await this.lineApi.reply(replyToken as string, [{ 
             type: 'text', 
-            text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / The system could not read the payment slip. Please send a clearer image.\n(หากมั่นใจว่าส่งสลิปถูกต้องแล้ว แอดมินจะตรวจสอบให้ภายหลังครับ / If you are sure this is correct, an admin will review it later.)` 
+            text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / The system could not read the payment slip. Please send a clearer image.\n(หากมั่นใจว่าส่งสลิปถูกต้องแล้ว แอดมินจะตรวจสอบให้ภายหลังครับ / If you are sure this is correct, an admin will review it later.)\n\nDEBUG: ${JSON.stringify(verificationResult)}` 
           }]);
         }
       }
