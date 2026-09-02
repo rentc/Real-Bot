@@ -274,14 +274,13 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
             const imageBuffer = await this.lineApi.getContent(messageId);
             let isSlip = false;
             if (pendingOrder) {
-                this.logger.log(`[Webhook] Sending image to AI to verify payment slip...`);
+                this.logger.log(`[Webhook] Pending order exists. Checking if image is payment slip with Gemini Vision...`);
                 const verificationResult = await this.aiService.verifyPaymentSlip(imageBuffer);
-                this.logger.log(`[Webhook] AI Verification Result: ${JSON.stringify(verificationResult)}`);
+                this.logger.log(`[Webhook] AI Slip Verification Result: ${JSON.stringify(verificationResult)}`);
                 isSlip = verificationResult.isSlip;
                 if (isSlip) {
                     const orderTotal = pendingOrder.total;
                     const slipAmount = verificationResult.amount || 0;
-                    const receiverName = (verificationResult.receiverName || '').toLowerCase();
                     const isValidAmount = Math.abs(slipAmount - orderTotal) < 1;
                     if (isValidAmount) {
                         let slipUrl = '';
@@ -302,33 +301,37 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                                 type: 'text',
                                 text: `✅ สลิปถูกต้อง ระบบได้รับหลักฐานการโอนเงินแล้วครับ / Payment proof received.\nหมายเลขคำสั่งซื้อ (Order Number): ${pendingOrder.orderNumber}\nยอดเงินที่ตรวจพบ (Amount Detected): ฿${slipAmount}\nแอดมินจะทำการตรวจสอบและยืนยันอีกครั้งครับ / Admin will review and confirm shortly.`
                             }]);
+                        return;
                     }
                     else {
                         await this.lineApi.reply(replyToken, [{
                                 type: 'text',
                                 text: `⚠️ ตรวจพบสลิปโอนเงิน แต่ยอดเงินหรือชื่อบัญชีไม่ถูกต้อง (${pendingOrder.orderNumber}) / Slip detected, but amount or account name is incorrect.\nยอดที่ต้องชำระ (Expected Amount): ฿${orderTotal}\nยอดในสลิป (Slip Amount): ฿${slipAmount || 0}\nชื่อบัญชีรับโอน (Receiver Name): ${verificationResult.receiverName || 'ไม่ทราบ'}\nแอดมินจะเข้ามาตรวจสอบอีกครั้งครับ / Admin will manually review this.`
                             }]);
+                        return;
                     }
                 }
-                else {
-                    await this.lineApi.reply(replyToken, [{
-                            type: 'text',
-                            text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / The system could not read the payment slip. Please send a clearer image.\n(หากมั่นใจว่าส่งสลิปถูกต้องแล้ว แอดมินจะตรวจสอบให้ภายหลังครับ / If you are sure this is correct, an admin will review it later.)\n\nDEBUG: ${JSON.stringify(verificationResult)}`
-                        }]);
-                }
             }
-            if (!isSlip && !pendingOrder) {
-                if (isAdmin) {
-                    await this.lineApi.reply(replyToken, [{
-                            type: 'text',
-                            text: `⚠️ ไม่พบคำสั่งซื้อที่รอการชำระเงินในขณะนี้ หากนี่คือสลิปโอนเงิน กรุณาสร้างคำสั่งซื้อก่อนครับ / No pending order found. If this is a payment slip, please create an order first.`
-                        }]);
-                    return;
-                }
-                const extraction = await this.aiService.extractQuotationFromMedia(imageBuffer, 'image/jpeg');
-                if (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE') {
-                    await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction);
-                }
+            this.logger.log(`[Webhook] Checking if image is quotation / cable request...`);
+            const extraction = await this.aiService.extractQuotationFromMedia(imageBuffer, 'image/jpeg');
+            this.logger.log(`[Webhook] AI Extraction Result: ${JSON.stringify(extraction)}`);
+            if (extraction && (extraction.intent === 'QUOTE' || extraction.intent === 'PRICE' || (extraction.items && extraction.items.length > 0))) {
+                await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction);
+                return;
+            }
+            if (pendingOrder) {
+                await this.lineApi.reply(replyToken, [{
+                        type: 'text',
+                        text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินหรือรายการขอราคาได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / Could not detect a payment slip or quotation request. Please send a clearer image.`
+                    }]);
+                return;
+            }
+            if (isAdmin) {
+                await this.lineApi.reply(replyToken, [{
+                        type: 'text',
+                        text: `⚠️ ไม่พบรายการขอราคา หรือหากนี่คือสลิปโอนเงิน ยังไม่พบคำสั่งซื้อที่รอชำระเงินในขณะนี้ครับ / No quotation items detected, and no pending order found.`
+                    }]);
+                return;
             }
         }
         catch (e) {
