@@ -381,21 +381,9 @@ export class LineWebhookService {
       }
 
       // 3. If neither a valid slip nor quotation items were detected:
-      if (pendingOrder) {
-        await this.lineApi.reply(replyToken as string, [{ 
-          type: 'text', 
-          text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินหรือรายการขอราคาได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / Could not detect a payment slip or quotation request. Please send a clearer image.` 
-        }]);
-        return;
-      }
-
-      if (isAdmin) {
-        await this.lineApi.reply(replyToken as string, [{ 
-          type: 'text', 
-          text: `⚠️ ไม่พบรายการขอราคา หรือหากนี่คือสลิปโอนเงิน ยังไม่พบคำสั่งซื้อที่รอชำระเงินในขณะนี้ครับ / No quotation items detected, and no pending order found.` 
-        }]);
-        return;
-      }
+      // Silently ignore to avoid interrupting normal group conversations (e.g. sharing diagrams, photos, general chat)
+      this.logger.log(`[Webhook] Image is neither a slip nor a quotation request (intent: ${extraction?.intent || 'OTHER'}). Silently ignoring.`);
+      return;
     } catch (e) {
       this.logger.error('Error handling image message', e);
     }

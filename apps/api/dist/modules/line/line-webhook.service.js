@@ -319,20 +319,8 @@ let LineWebhookService = LineWebhookService_1 = class LineWebhookService {
                 await this.processQuotationRequest('tenant_wrc_main', groupId, userId, replyToken, extraction);
                 return;
             }
-            if (pendingOrder) {
-                await this.lineApi.reply(replyToken, [{
-                        type: 'text',
-                        text: `⚠️ ระบบไม่สามารถอ่านข้อมูลสลิปโอนเงินหรือรายการขอราคาได้ กรุณาถ่ายรูปให้ชัดเจนและส่งใหม่อีกครั้งครับ / Could not detect a payment slip or quotation request. Please send a clearer image.`
-                    }]);
-                return;
-            }
-            if (isAdmin) {
-                await this.lineApi.reply(replyToken, [{
-                        type: 'text',
-                        text: `⚠️ ไม่พบรายการขอราคา หรือหากนี่คือสลิปโอนเงิน ยังไม่พบคำสั่งซื้อที่รอชำระเงินในขณะนี้ครับ / No quotation items detected, and no pending order found.`
-                    }]);
-                return;
-            }
+            this.logger.log(`[Webhook] Image is neither a slip nor a quotation request (intent: ${extraction?.intent || 'OTHER'}). Silently ignoring.`);
+            return;
         }
         catch (e) {
             this.logger.error('Error handling image message', e);
